@@ -446,6 +446,7 @@
 <script>
 /* ================= CONFIG ================= */
 const RESTAURANT_WHATSAPP = "50762759035"; // 507 + 6275-9035
+const SITE_URL = "https://jasibeth.vercel.app";
 const CREDIT_DAYS_LIMIT = 15; // días para considerar un fiado vencido
 const ADMIN_USER = "Keren";
 const ADMIN_PASS = "8888";
@@ -590,8 +591,8 @@ function openPhoto(src, name, price){
   document.getElementById('downloadPhotoBtn').dataset.src = src;
   document.getElementById('waSharePhotoBtn').dataset.src = src;
   const defaultMsg = name
-    ? `¡Te invito a probar este delicioso plato! 😋\n*${name}*${price? ' - '+price : ''}\nEn Delicias Jasibe 🍔\nPide desde tu celular:`
-    : `¡Mira este plato de Delicias Jasibe! 🍔`;
+    ? `¡Te invito a probar este delicioso plato! 😋\n*${name}*${price? ' - '+price : ''}\nEn Delicias Jasibe 🍔\nPide desde tu celular aquí:\n${SITE_URL}`
+    : `¡Mira este plato de Delicias Jasibe! 🍔\nPide aquí: ${SITE_URL}`;
   document.getElementById('photoShareMsg').value = defaultMsg;
   openModal('modalPhoto');
 }
