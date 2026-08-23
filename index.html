@@ -436,7 +436,7 @@
     <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
       <button id="waSharePhotoBtn" class="primary-btn whatsapp-btn" style="width:auto;padding:10px 18px;">💬 Enviar por WhatsApp</button>
       <button id="sharePhotoBtn" class="primary-btn" style="width:auto;padding:10px 18px;">📤 Compartir</button>
-      <button id="downloadPhotoBtn" class="secondary-btn" style="width:auto;padding:10px 18px;">⬇️ Descargar</button>
+      <button id="downloadPhotoBtn" class="secondary-btn" style="width:auto;padding:10px 18px;">⬇️ Descargar foto + copiar mensaje</button>
     </div>
   </div>
 </div>
@@ -524,11 +524,12 @@ function money(n){ return "$" + Number(n).toFixed(2); }
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 function monthStr(){ return new Date().toISOString().slice(0,7); }
 
-function showToast(msg){
+function showToast(msg, duration){
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 1800);
+  clearTimeout(t._hideTimer);
+  t._hideTimer = setTimeout(()=>t.classList.remove('show'), duration || 1800);
 }
 
 /* ================= NAV ================= */
@@ -605,6 +606,7 @@ document.getElementById('waSharePhotoBtn').addEventListener('click', ()=>{
 
 document.getElementById('downloadPhotoBtn').addEventListener('click', async ()=>{
   const src = document.getElementById('downloadPhotoBtn').dataset.src;
+  const msg = document.getElementById('photoShareMsg').value.trim();
   if(!src) return;
   try{
     const resp = await fetch(src);
@@ -620,12 +622,20 @@ document.getElementById('downloadPhotoBtn').addEventListener('click', async ()=>
   }catch(e){
     window.open(src, '_blank');
   }
+  try{
+    await navigator.clipboard.writeText(msg);
+    showToast("Foto descargada y mensaje copiado. Adjunta la foto en WhatsApp y pega (Ctrl+V) el mensaje como descripción.", 4500);
+  }catch(e){
+    showToast("Foto descargada. Copia el mensaje de arriba manualmente para pegarlo en WhatsApp.", 4500);
+  }
 });
 
 document.getElementById('sharePhotoBtn').addEventListener('click', async ()=>{
   const src = document.getElementById('sharePhotoBtn').dataset.src;
   const msg = document.getElementById('photoShareMsg').value.trim();
   if(!src) return;
+  try{ await navigator.clipboard.writeText(msg); }catch(e){}
+  showToast("Mensaje copiado. Si no llega junto a la foto, pégalo (Ctrl+V) en el chat.", 4500);
   try{
     const resp = await fetch(src);
     const blob = await resp.blob();
