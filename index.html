@@ -1735,6 +1735,21 @@ function renderMenuAdmin(){
         <button class="mini-btn" data-toggle="${i.id}">${i.active===false?'Activar':'Ocultar'}</button>
         <button class="mini-btn danger" data-delete="${i.id}">Eliminar</button>
       </div>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+        <div style="flex:2;min-width:140px;">
+          <label class="field" style="margin:4px 0 2px;">Nombre</label>
+          <input type="text" data-edit-name="${i.id}" value="${i.name.replace(/"/g,'&quot;')}">
+        </div>
+        <div style="flex:1;min-width:100px;">
+          <label class="field" style="margin:4px 0 2px;">Categoría</label>
+          <input type="text" data-edit-cat="${i.id}" value="${i.category.replace(/"/g,'&quot;')}">
+        </div>
+        <div style="flex:1;min-width:90px;">
+          <label class="field" style="margin:4px 0 2px;">Precio</label>
+          <input type="text" data-edit-price="${i.id}" value="${i.price}">
+        </div>
+      </div>
+      <button class="mini-btn" data-saveedit="${i.id}" style="margin-top:6px;align-self:flex-start;">💾 Guardar cambios</button>
       <div style="margin-top:8px;">
         <label class="field" style="margin:4px 0 2px;">Agregar más fotos/videos a este plato</label>
         <input type="file" data-addmedia="${i.id}" accept="image/jpeg,image/jpg,video/mp4,video/quicktime" multiple>
@@ -1753,6 +1768,29 @@ function renderMenuAdmin(){
       menu = await loadMenu();
       const it = menu.find(x=>x.id===b.dataset.toggle);
       if(it){ it.active = it.active===false ? true : false; await saveMenu(menu); renderMenuAdmin(); renderChips(); renderMenu(); }
+    });
+  });
+  wrap.querySelectorAll('[data-saveedit]').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      const id = b.dataset.saveedit;
+      const nameEl = wrap.querySelector(`[data-edit-name="${id}"]`);
+      const catEl = wrap.querySelector(`[data-edit-cat="${id}"]`);
+      const priceEl = wrap.querySelector(`[data-edit-price="${id}"]`);
+      const newName = nameEl.value.trim();
+      const newCat = catEl.value.trim();
+      const newPrice = parseFloat(priceEl.value.trim().replace(',', '.'));
+      if(!newName || !newCat || isNaN(newPrice)){
+        showToast("Completa nombre, categoría y precio válido");
+        return;
+      }
+      menu = await loadMenu();
+      const it = menu.find(x=>x.id===id);
+      if(it){
+        it.name = newName; it.category = newCat; it.price = newPrice;
+        await saveMenu(menu);
+        renderMenuAdmin(); populateCatSelect(); renderChips(); renderMenu();
+        showToast("Plato actualizado");
+      }
     });
   });
   wrap.querySelectorAll('[data-addmedia]').forEach(input=>{
