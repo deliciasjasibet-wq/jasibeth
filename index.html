@@ -362,6 +362,13 @@
   </div>
 </div>
 
+<div id="modalPhoto" class="overlay hidden" style="align-items:center;justify-content:center;">
+  <div style="position:relative;max-width:92vw;max-height:88vh;">
+    <button data-close="modalPhoto" style="position:absolute;top:-14px;right:-14px;width:34px;height:34px;border-radius:50%;background:#fff;border:none;font-size:18px;box-shadow:0 2px 10px rgba(0,0,0,.25);">✕</button>
+    <img id="modalPhotoImg" src="" style="max-width:92vw;max-height:88vh;border-radius:16px;display:block;object-fit:contain;">
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -475,7 +482,7 @@ function renderMenu(){
   if(items.length===0){ grid.innerHTML = `<div class="empty-note">No hay platos en esta categoría todavía.</div>`; return; }
   grid.innerHTML = items.map(i=>`
     <div class="item-card">
-      <div class="item-emoji">${i.image ? `<img src="${i.image}" alt="${i.name}">` : (i.emoji||'🍽️')}</div>
+      <div class="item-emoji" ${i.image ? `data-photo="${i.image}"` : ''}>${i.image ? `<img src="${i.image}" alt="${i.name}">` : (i.emoji||'🍽️')}</div>
       <div class="item-name">${i.name}</div>
       <div class="item-price">${money(i.price)}</div>
       <button class="add-btn" data-add="${i.id}">Agregar</button>
@@ -484,6 +491,15 @@ function renderMenu(){
   grid.querySelectorAll('[data-add]').forEach(b=>{
     b.addEventListener('click', ()=>addToCart(b.dataset.add));
   });
+  grid.querySelectorAll('[data-photo]').forEach(el=>{
+    el.style.cursor = 'zoom-in';
+    el.addEventListener('click', ()=> openPhoto(el.dataset.photo));
+  });
+}
+
+function openPhoto(src){
+  document.getElementById('modalPhotoImg').src = src;
+  openModal('modalPhoto');
 }
 
 /* ================= CARRITO ================= */
@@ -492,7 +508,7 @@ function addToCart(itemId){
   if(!item) return;
   const existing = cart.find(c=>c.itemId===itemId);
   if(existing) existing.qty += 1;
-  else cart.push({itemId, name:item.name, price:item.price, qty:1});
+  else cart.push({itemId, name:item.name, price:item.price, qty:1, image:item.image||null});
   renderCartBar();
   showToast(item.name + " agregado");
 }
@@ -624,6 +640,12 @@ function buildWhatsAppLink(order){
   if(order.notas) lines.push(`Notas: ${order.notas}`);
   lines.push(`Cliente: ${order.cliente.nombre} (${order.cliente.telefono})`);
   lines.push(`Dirección: ${order.cliente.direccion}`);
+  const photos = [...new Set(order.items.filter(i=>i.image).map(i=>i.image))];
+  if(photos.length){
+    lines.push('');
+    lines.push('Foto(s) del pedido:');
+    photos.forEach(p=> lines.push(p));
+  }
   const text = encodeURIComponent(lines.join('\n'));
   return `https://wa.me/${RESTAURANT_WHATSAPP}?text=${text}`;
 }
