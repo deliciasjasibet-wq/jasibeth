@@ -62,7 +62,7 @@
   main{max-width:720px;margin:0 auto;padding:16px;}
 
   /* ---------- Category chips ---------- */
-  .chips{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;}
+  .chips{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;}
   .chip{
     width:100%;text-align:left;
     background:var(--paper);border:1.5px solid var(--line);
@@ -369,6 +369,10 @@
   </div>
 
   <div id="adminPanel" class="hidden">
+    <div class="row-between" style="margin-bottom:10px;">
+      <span style="font-size:12.5px;color:var(--ink-soft);font-weight:700;">🔒 Sesión de Admin</span>
+      <button class="mini-btn" id="adminLogoutBtn">Salir</button>
+    </div>
     <div class="admin-tabs" id="adminTabs">
       <button data-atab="cocina" class="active">👨‍🍳 Cocina</button>
       <button data-atab="cuentas">📊 Cuentas</button>
@@ -709,18 +713,18 @@ function showUndoBar(text, onUndo, duration){
 }
 
 /* ================= NAV ================= */
-document.getElementById('mainTabs').addEventListener('click', (e)=>{
-  const btn = e.target.closest('button[data-view]');
-  if(!btn) return;
-  document.querySelectorAll('#mainTabs button').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  const view = btn.dataset.view;
+function switchMainView(view){
+  document.querySelectorAll('#mainTabs button').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
   ['cliente','vendedor','admin'].forEach(v=>{
     document.getElementById('view-'+v).classList.toggle('hidden', v!==view);
   });
   document.getElementById('cartbar').classList.toggle('hidden', view!=='cliente' || cart.length===0);
-  if(view==='cocina') renderCocina();
   if(view==='admin' && adminLoggedIn) renderAdmin();
+}
+document.getElementById('mainTabs').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-view]');
+  if(!btn) return;
+  switchMainView(btn.dataset.view);
 });
 
 /* ================= CLIENTE: MENU ================= */
@@ -1400,6 +1404,13 @@ document.getElementById('adminLoginBtn').addEventListener('click', ()=>{
     document.getElementById('adminLoginError').textContent = "Usuario o contraseña incorrectos.";
   }
 });
+document.getElementById('adminLogoutBtn').addEventListener('click', ()=>{
+  adminLoggedIn = false;
+  document.getElementById('adminPass').value = '';
+  document.getElementById('adminPanel').classList.add('hidden');
+  document.getElementById('adminLogin').classList.remove('hidden');
+  document.getElementById('adminLoginError').textContent = '';
+});
 
 /* ================= VENDEDOR ================= */
 document.getElementById('vendedorLoginBtn').addEventListener('click', async ()=>{
@@ -1426,6 +1437,7 @@ document.getElementById('vendedorLogoutBtn').addEventListener('click', ()=>{
   document.getElementById('vendedorPanel').classList.add('hidden');
   document.getElementById('vendedorLogin').classList.remove('hidden');
   document.getElementById('vendedorLoginError').textContent = '';
+  switchMainView('cliente');
 });
 
 document.getElementById('adminTabs').addEventListener('click', (e)=>{
