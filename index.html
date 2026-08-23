@@ -478,8 +478,6 @@
 <div id="modalCheckout" class="overlay hidden">
   <div class="sheet">
     <div class="sheet-head"><h2>Tus datos</h2><button class="close-x" data-close="modalCheckout">✕</button></div>
-    <label class="field">Cédula</label>
-    <input type="text" id="ckCedula" placeholder="8-123-4567">
     <div id="ckClienteWarn" class="hidden" style="font-size:12.5px;font-weight:700;margin:4px 0;padding:8px 10px;border-radius:10px;background:#FDE8E8;color:var(--danger);"></div>
     <label class="field">Nombre completo</label>
     <input type="text" id="ckNombre" placeholder="Nombre y apellido">
@@ -501,7 +499,6 @@
     <div class="pay-options" id="payOptions">
       <div class="pay-opt" data-pay="efectivo"><div class="ico">💵</div><div class="lbl">Efectivo</div></div>
       <div class="pay-opt" data-pay="yappy"><div class="ico">📱</div><div class="lbl">Yappy</div></div>
-      <div class="pay-opt" data-pay="fiado"><div class="ico">📝</div><div class="lbl">Fiado</div></div>
     </div>
     <button class="primary-btn" id="submitOrderBtn">Confirmar pedido</button>
     <div id="checkoutError" style="color:var(--danger);font-size:12.5px;margin-top:8px;"></div>
@@ -1092,17 +1089,16 @@ document.getElementById('entregaOptions').addEventListener('click', (e)=>{
 document.querySelector('#entregaOptions .pay-opt[data-entrega="restaurante"]').classList.add('selected');
 document.getElementById('ckDireccionWrap').classList.add('hidden');
 
-document.getElementById('ckCedula').addEventListener('blur', async ()=>{
-  const ced = document.getElementById('ckCedula').value.trim();
-  if(!ced) return;
-  const prev = [...orders].reverse().find(o=>o.cliente.cedula===ced);
+document.getElementById('ckTelefono').addEventListener('blur', async ()=>{
+  const tel = document.getElementById('ckTelefono').value.trim();
+  if(!tel) return;
+  const prev = [...orders].reverse().find(o=>o.cliente.telefono===tel);
   if(prev){
     document.getElementById('ckNombre').value = prev.cliente.nombre;
-    document.getElementById('ckTelefono').value = prev.cliente.telefono;
-    document.getElementById('ckDireccion').value = prev.cliente.direccion;
+    if(prev.cliente.tipoEntrega==='domicilio') document.getElementById('ckDireccion').value = prev.cliente.direccion;
     showToast("Cliente encontrado, datos autocompletados");
   }
-  const info = (await loadClients())[ced];
+  const info = (await loadClients())[tel];
   const warnEl = document.getElementById('ckClienteWarn');
   if(info && info.rating==='malo'){
     warnEl.textContent = `⚠️ Este cliente NO recogió su pedido la última vez.${info.note ? ' Nota: '+info.note : ''}`;
@@ -1122,12 +1118,11 @@ document.getElementById('ckCedula').addEventListener('blur', async ()=>{
 document.getElementById('submitOrderBtn').addEventListener('click', async ()=>{
   const nombre = document.getElementById('ckNombre').value.trim();
   const telefono = document.getElementById('ckTelefono').value.trim();
-  const cedula = document.getElementById('ckCedula').value.trim();
   let direccion = document.getElementById('ckDireccion').value.trim();
   const notas = document.getElementById('ckNotas').value.trim();
   const errEl = document.getElementById('checkoutError');
-  if(!nombre || !telefono || !cedula){
-    errEl.textContent = "Por favor completa nombre, teléfono y cédula.";
+  if(!nombre || !telefono){
+    errEl.textContent = "Por favor completa nombre y teléfono.";
     return;
   }
   if(selectedEntrega==='domicilio' && !direccion){
@@ -1145,7 +1140,7 @@ document.getElementById('submitOrderBtn').addEventListener('click', async ()=>{
   const order = {
     id: uid('ord-'),
     folio: folioNum,
-    cliente: {nombre, telefono, cedula, direccion, tipoEntrega: selectedEntrega},
+    cliente: {nombre, telefono, direccion, tipoEntrega: selectedEntrega},
     items: cart.map(c=>({name:c.name, price:c.price, qty:c.qty})),
     notas,
     total: cartTotal(),
@@ -1163,7 +1158,6 @@ document.getElementById('submitOrderBtn').addEventListener('click', async ()=>{
   closeModal('modalCheckout');
 
   // Limpiar el formulario para que el siguiente cliente no herede estos datos
-  document.getElementById('ckCedula').value = '';
   document.getElementById('ckNombre').value = '';
   document.getElementById('ckTelefono').value = '';
   document.getElementById('ckDireccion').value = '';
@@ -1266,7 +1260,7 @@ function ticketHTML(o, showActions, isAdmin, isKitchen){
         <span>Total</span><span>${money(o.total)}</span>
       </div>
       ${o.notas ? `<div class="ticket-cust">📝 ${o.notas}</div>` : ''}
-      <div class="ticket-cust">${({restaurante:'🏠',recoger:'🚶',domicilio:'🛵'})[o.cliente.tipoEntrega]||''} ${o.cliente.nombre} · <a href="${waChatLink(o.cliente.telefono)}" target="_blank" style="color:#1EA57E;font-weight:700;text-decoration:underline;">💬 ${o.cliente.telefono}</a>${clients[o.cliente.cedula]?.rating==='malo' ? ' <b style="color:var(--danger);">⚠️ No recogió antes</b>' : clients[o.cliente.cedula]?.rating==='bueno' ? ' <b style="color:var(--basil);">👍</b>' : ''}<br>${o.cliente.direccion}</div>
+      <div class="ticket-cust">${({restaurante:'🏠',recoger:'🚶',domicilio:'🛵'})[o.cliente.tipoEntrega]||''} ${o.cliente.nombre} · <a href="${waChatLink(o.cliente.telefono)}" target="_blank" style="color:#1EA57E;font-weight:700;text-decoration:underline;">💬 ${o.cliente.telefono}</a>${clients[o.cliente.telefono]?.rating==='malo' ? ' <b style="color:var(--danger);">⚠️ No recogió antes</b>' : clients[o.cliente.telefono]?.rating==='bueno' ? ' <b style="color:var(--basil);">👍</b>' : ''}<br>${o.cliente.direccion}</div>
       <div class="status-row">
         <span class="tag-pill tag-${o.estado}">${estadoLabel}</span>
         <span class="tag-pill tag-${o.estadoPago}">${o.estadoPago==='pagado'?'Pagado':'Pago pendiente'}</span>
@@ -1287,7 +1281,7 @@ function ticketHTML(o, showActions, isAdmin, isKitchen){
       ${isKitchen ? `
       <div class="ticket-actions" style="margin-top:8px;flex-wrap:wrap;">
         <button class="btn-delete" data-pin-delete="${o.id}">🗑️ Eliminar (clave)</button>
-        <button class="btn-reject" data-pin-badclient="${o.cliente.cedula}">⚠️ Mal cliente (clave)</button>
+        <button class="btn-reject" data-pin-badclient="${o.cliente.telefono}">⚠️ Mal cliente (clave)</button>
       </div>` : ''}
     </div>
   `;
@@ -1515,7 +1509,7 @@ function renderCreditos(){
   if(fiados.length===0){ wrap.innerHTML = `<div class="empty-admin">No hay créditos pendientes 🎉</div>`; return; }
   const byClient = {};
   fiados.forEach(o=>{
-    const key = o.cliente.cedula;
+    const key = o.cliente.telefono;
     if(!byClient[key]) byClient[key] = {cliente:o.cliente, ordenes:[]};
     byClient[key].ordenes.push(o);
   });
@@ -1529,7 +1523,7 @@ function renderCreditos(){
         <div class="row-between">
           <div>
             <div style="font-weight:700;">${g.cliente.nombre}</div>
-            <div style="font-size:12px;color:var(--ink-soft);">💬 <a href="${waChatLink(g.cliente.telefono)}" target="_blank" style="color:inherit;text-decoration:underline;">${g.cliente.telefono}</a> · Cédula ${g.cliente.cedula}</div>
+            <div style="font-size:12px;color:var(--ink-soft);">💬 <a href="${waChatLink(g.cliente.telefono)}" target="_blank" style="color:inherit;text-decoration:underline;">${g.cliente.telefono}</a></div>
           </div>
           <div style="text-align:right;">
             <div style="font-weight:700;color:var(--chili-dark);">${money(total)}</div>
@@ -1537,16 +1531,16 @@ function renderCreditos(){
           </div>
         </div>
         <div class="ticket-actions">
-          <button class="btn-pay" data-clearcredit="${g.cliente.cedula}">Marcar todo pagado</button>
+          <button class="btn-pay" data-clearcredit="${g.cliente.telefono}">Marcar todo pagado</button>
         </div>
       </div>
     `;
   }).join('');
   wrap.querySelectorAll('[data-clearcredit]').forEach(b=>{
     b.addEventListener('click', async ()=>{
-      const ced = b.dataset.clearcredit;
+      const tel = b.dataset.clearcredit;
       orders = await loadOrders();
-      orders.forEach(o=>{ if(o.cliente.cedula===ced && o.metodoPago==='fiado') o.estadoPago='pagado'; });
+      orders.forEach(o=>{ if(o.cliente.telefono===tel && o.metodoPago==='fiado') o.estadoPago='pagado'; });
       await saveOrders(orders);
       renderCreditos();
       renderCuentas();
@@ -1560,7 +1554,7 @@ function renderClientes(){
   const wrap = document.getElementById('clientesList');
   const byClient = {};
   orders.forEach(o=>{
-    const key = o.cliente.cedula;
+    const key = o.cliente.telefono;
     if(!key) return;
     if(!byClient[key]) byClient[key] = { cliente:o.cliente, count:0, total:0 };
     byClient[key].count += 1;
@@ -1569,8 +1563,8 @@ function renderClientes(){
   const list = Object.values(byClient).sort((a,b)=> b.count - a.count);
   if(list.length===0){ wrap.innerHTML = `<div class="empty-admin">Todavía no hay clientes registrados.</div>`; return; }
   wrap.innerHTML = list.map(g=>{
-    const ced = g.cliente.cedula;
-    const info = clients[ced] || { rating:'', note:'' };
+    const tel = g.cliente.telefono;
+    const info = clients[tel] || { rating:'', note:'' };
     const badge = info.rating==='bueno' ? `<span class="tag-pill" style="background:#DFF2EE;color:var(--basil);">👍 Buen cliente</span>`
       : info.rating==='malo' ? `<span class="tag-pill" style="background:#FDE8E8;color:var(--danger);">⚠️ No recogió pedido</span>`
       : `<span class="tag-pill" style="background:#F1EAE0;color:var(--ink-soft);">Sin clasificar</span>`;
@@ -1579,26 +1573,26 @@ function renderClientes(){
         <div class="row-between">
           <div>
             <div style="font-weight:700;">${g.cliente.nombre}</div>
-            <div style="font-size:12px;color:var(--ink-soft);">💬 <a href="${waChatLink(g.cliente.telefono)}" target="_blank" style="color:inherit;text-decoration:underline;">${g.cliente.telefono}</a> · Cédula ${ced}</div>
+            <div style="font-size:12px;color:var(--ink-soft);">💬 <a href="${waChatLink(g.cliente.telefono)}" target="_blank" style="color:inherit;text-decoration:underline;">${g.cliente.telefono}</a></div>
             <div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">${g.count} pedido(s) · ${money(g.total)} en total</div>
           </div>
           <div style="text-align:right;">${badge}</div>
         </div>
-        <textarea data-note="${ced}" placeholder="Nota (opcional, ej: dejó el pedido el 10 de agosto)" style="width:100%;margin-top:8px;border-radius:10px;border:1.5px solid var(--line);padding:8px;font-family:inherit;font-size:12.5px;">${info.note||''}</textarea>
+        <textarea data-note="${tel}" placeholder="Nota (opcional, ej: dejó el pedido el 10 de agosto)" style="width:100%;margin-top:8px;border-radius:10px;border:1.5px solid var(--line);padding:8px;font-family:inherit;font-size:12.5px;">${info.note||''}</textarea>
         <div class="ticket-actions" style="margin-top:8px;">
-          <button class="btn-pay" data-rate="${ced}" data-value="bueno">👍 Buen cliente</button>
-          <button class="btn-reject" data-rate="${ced}" data-value="malo">⚠️ No recogió</button>
+          <button class="btn-pay" data-rate="${tel}" data-value="bueno">👍 Buen cliente</button>
+          <button class="btn-reject" data-rate="${tel}" data-value="malo">⚠️ No recogió</button>
         </div>
       </div>
     `;
   }).join('');
   wrap.querySelectorAll('[data-rate]').forEach(b=>{
     b.addEventListener('click', async ()=>{
-      const ced = b.dataset.rate;
+      const tel = b.dataset.rate;
       const value = b.dataset.value;
-      const noteEl = wrap.querySelector(`[data-note="${ced}"]`);
+      const noteEl = wrap.querySelector(`[data-note="${tel}"]`);
       clients = await loadClients();
-      clients[ced] = { rating:value, note: noteEl ? noteEl.value.trim() : (clients[ced]?.note||'') };
+      clients[tel] = { rating:value, note: noteEl ? noteEl.value.trim() : (clients[tel]?.note||'') };
       await saveClients(clients);
       showToast("Cliente clasificado");
       renderClientes();
@@ -1606,9 +1600,9 @@ function renderClientes(){
   });
   wrap.querySelectorAll('[data-note]').forEach(t=>{
     t.addEventListener('blur', async ()=>{
-      const ced = t.dataset.note;
+      const tel = t.dataset.note;
       clients = await loadClients();
-      clients[ced] = { rating: clients[ced]?.rating||'', note: t.value.trim() };
+      clients[tel] = { rating: clients[tel]?.rating||'', note: t.value.trim() };
       await saveClients(clients);
     });
   });
