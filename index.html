@@ -474,7 +474,6 @@
     <textarea id="photoShareMsg" rows="3" style="width:100%;max-width:420px;border-radius:12px;border:1.5px solid var(--line);padding:10px;font-family:inherit;font-size:13.5px;resize:vertical;"></textarea>
     <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
       <button id="sharePhotoBtn" class="primary-btn whatsapp-btn" style="width:auto;padding:10px 18px;">💬 Enviar por WhatsApp</button>
-      <button id="downloadPhotoBtn" class="secondary-btn" style="width:auto;padding:10px 18px;">⬇️ Descargar foto + copiar mensaje</button>
     </div>
   </div>
 </div>
@@ -774,9 +773,7 @@ function openPhoto(src, name, price, mediaType, customMsg){
     hint.classList.remove('hidden');
   }
   document.getElementById('sharePhotoBtn').dataset.src = src;
-  document.getElementById('downloadPhotoBtn').dataset.src = src;
   document.getElementById('sharePhotoBtn').dataset.type = mediaType || 'image';
-  document.getElementById('downloadPhotoBtn').dataset.type = mediaType || 'image';
   const defaultMsg = customMsg && customMsg.trim()
     ? customMsg.trim()
     : (name
@@ -785,34 +782,6 @@ function openPhoto(src, name, price, mediaType, customMsg){
   document.getElementById('photoShareMsg').value = defaultMsg;
   openModal('modalPhoto');
 }
-
-document.getElementById('downloadPhotoBtn').addEventListener('click', async ()=>{
-  const btnEl = document.getElementById('downloadPhotoBtn');
-  const src = btnEl.dataset.src;
-  const isVideo = btnEl.dataset.type === 'video';
-  const msg = document.getElementById('photoShareMsg').value.trim();
-  if(!src) return;
-  try{
-    const resp = await fetch(src);
-    const blob = await resp.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = isVideo ? 'delicias-jasibe-video.mp4' : 'delicias-jasibe-plato.jpg';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }catch(e){
-    window.open(src, '_blank');
-  }
-  try{
-    await navigator.clipboard.writeText(msg);
-    showToast(`${isVideo?'Video':'Foto'} descargado y mensaje copiado. Adjúntalo en WhatsApp y pega (Ctrl+V) el mensaje como descripción.`, 4500);
-  }catch(e){
-    showToast(`${isVideo?'Video':'Foto'} descargado. Copia el mensaje de arriba manualmente para pegarlo en WhatsApp.`, 4500);
-  }
-});
 
 document.getElementById('sharePhotoBtn').addEventListener('click', async ()=>{
   const btnEl = document.getElementById('sharePhotoBtn');
@@ -837,7 +806,7 @@ document.getElementById('sharePhotoBtn').addEventListener('click', async ()=>{
     }
     throw new Error('share not supported');
   }catch(e){
-    showToast("Tu navegador no permite compartir directo. Usa el botón 'Descargar'.");
+    showToast("Tu navegador no permite compartir directo desde aquí. Intenta desde el celular.", 4000);
   }
 });
 
