@@ -488,6 +488,7 @@ const SITE_URL = "https://jasibeth.vercel.app";
 const CREDIT_DAYS_LIMIT = 15; // días para considerar un fiado vencido
 const ADMIN_USER = "Keren";
 const ADMIN_PASS = "8888";
+const COCINA_PIN = "9999"; // clave rápida para que cocina elimine/clasifique sin entrar como admin
 
 /* ================= SUPABASE ================= */
 const SUPABASE_URL = "https://vgjtrhuwnqtlvxmrmixj.supabase.co";
@@ -1012,21 +1013,44 @@ function buildWhatsAppLink(order){
 }
 
 /* ================= COCINA ================= */
+function askPin(callback){
+  const pin = prompt("🔒 Ingresa la clave para esta acción:");
+  if(pin === null) return; // canceló
+  if(pin === COCINA_PIN || pin === ADMIN_PASS){
+    callback();
+  }else{
+    showToast("Clave incorrecta");
+  }
+}
 function renderCocina(){
   const wrap = document.getElementById('cocinaList');
   const activos = orders
     .filter(o=>o.estado!=='despachado' && o.estado!=='rechazado' && o.estado!=='suspendido')
     .sort((a,b)=> new Date(a.createdAt) - new Date(b.createdAt));
   if(activos.length===0){ wrap.innerHTML = `<div class="empty-note">No hay pedidos activos.</div>`; return; }
-  wrap.innerHTML = activos.map(o=>ticketHTML(o, true)).join('');
+  wrap.innerHTML = activos.map(o=>ticketHTML(o, true, false, true)).join('');
   wrap.querySelectorAll('[data-advance]').forEach(b=>{
     b.addEventListener('click', ()=>advanceOrder(b.dataset.advance));
   });
   wrap.querySelectorAll('[data-pay]').forEach(b=>{
     b.addEventListener('click', ()=>markPaid(b.dataset.pay));
   });
+  wrap.querySelectorAll('[data-pin-delete]').forEach(b=>{
+    b.addEventListener('click', ()=> askPin(()=> deleteOrder(b.dataset.pinDelete)));
+  });
+  wrap.querySelectorAll('[data-pin-badclient]').forEach(b=>{
+    b.addEventListener('click', ()=> askPin(async ()=>{
+      const ced = b.dataset.pinBadclient;
+      if(!ced) return;
+      clients = await loadClients();
+      clients[ced] = { rating:'malo', note: clients[ced]?.note||'' };
+      await saveClients(clients);
+      showToast("Cliente marcado como mal cliente");
+      renderCocina();
+    }));
+  });
 }
-function ticketHTML(o, showActions, isAdmin){
+function ticketHTML(o, showActions, isAdmin, isKitchen){
   const elapsed = Math.max(0, Math.round((Date.now() - new Date(o.createdAt).getTime())/60000));
   const estadoLabel = {recibido:'Recibido', preparacion:'En preparación', despachado:'Despachado', rechazado:'Rechazado', suspendido:'Suspendido'}[o.estado];
   const nextLabel = {recibido:'Pasar a preparación', preparacion:'Marcar despachado'}[o.estado] || '';
@@ -1059,6 +1083,11 @@ function ticketHTML(o, showActions, isAdmin){
         ${!isTerminalBad ? `<button class="btn-suspend" data-suspend="${o.id}">Suspender</button>`:''}
         ${isTerminalBad ? `<button class="btn-reactivate" data-reactivate="${o.id}">Reactivar</button>`:''}
         <button class="btn-delete" data-delete-order="${o.id}">🗑️ Eliminar</button>
+      </div>` : ''}
+      ${isKitchen ? `
+      <div class="ticket-actions" style="margin-top:8px;flex-wrap:wrap;">
+        <button class="btn-delete" data-pin-delete="${o.id}">🗑️ Eliminar (clave)</button>
+        <button class="btn-reject" data-pin-badclient="${o.cliente.cedula}">⚠️ Mal cliente (clave)</button>
       </div>` : ''}
     </div>
   `;
