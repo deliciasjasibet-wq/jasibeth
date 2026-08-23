@@ -175,6 +175,8 @@
   .tag-recibido{background:#FFEFD6;color:#96660B;}
   .tag-preparacion{background:#FFE1D0;color:var(--chili-dark);}
   .tag-despachado{background:#DFF2EE;color:var(--basil);}
+  .tag-rechazado{background:#FDE8E8;color:var(--danger);}
+  .tag-suspendido{background:#EAEAEA;color:#555;}
   .tag-pagado{background:#DFF2EE;color:var(--basil);}
   .tag-pendiente{background:#FDE8E8;color:var(--danger);}
   .tag-vencido{background:var(--danger);color:#fff;}
@@ -184,6 +186,10 @@
   }
   .btn-advance{background:var(--ink);}
   .btn-pay{background:var(--basil);}
+  .btn-reject{background:var(--danger);}
+  .btn-suspend{background:#8A8A8A;}
+  .btn-reactivate{background:var(--mustard);color:var(--ink);}
+  .btn-delete{background:#fff;color:var(--danger);border:1.5px solid var(--danger);}
 
   /* ---------- Admin ---------- */
   .login-box{max-width:340px;margin:60px auto;background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:24px;text-align:center;}
@@ -338,8 +344,16 @@
     <input type="text" id="ckNombre" placeholder="Nombre y apellido">
     <label class="field">Teléfono</label>
     <input type="tel" id="ckTelefono" placeholder="6000-0000">
-    <label class="field">Dirección de entrega</label>
-    <textarea id="ckDireccion" placeholder="Barrio, casa, referencia..."></textarea>
+    <label class="field">¿Cómo vas a recibir tu pedido?</label>
+    <div class="pay-options" id="entregaOptions">
+      <div class="pay-opt" data-entrega="restaurante"><div class="ico">🏠</div><div class="lbl">Aquí en el restaurante</div></div>
+      <div class="pay-opt" data-entrega="recoger"><div class="ico">🚶</div><div class="lbl">Paso buscándola</div></div>
+      <div class="pay-opt" data-entrega="domicilio"><div class="ico">🛵</div><div class="lbl">A domicilio</div></div>
+    </div>
+    <div id="ckDireccionWrap">
+      <label class="field">Dirección de entrega</label>
+      <textarea id="ckDireccion" placeholder="Barrio, casa, referencia..."></textarea>
+    </div>
     <label class="field">Notas del pedido (opcional)</label>
     <textarea id="ckNotas" placeholder="Sin cebolla, extra salsa..."></textarea>
     <label class="field">Forma de pago</label>
@@ -363,9 +377,15 @@
 </div>
 
 <div id="modalPhoto" class="overlay hidden" style="align-items:center;justify-content:center;">
-  <div style="position:relative;max-width:92vw;max-height:88vh;">
-    <button data-close="modalPhoto" style="position:absolute;top:-14px;right:-14px;width:34px;height:34px;border-radius:50%;background:#fff;border:none;font-size:18px;box-shadow:0 2px 10px rgba(0,0,0,.25);">✕</button>
-    <img id="modalPhotoImg" src="" style="max-width:92vw;max-height:88vh;border-radius:16px;display:block;object-fit:contain;">
+  <div style="position:relative;max-width:92vw;max-height:92vh;display:flex;flex-direction:column;align-items:center;gap:10px;">
+    <button data-close="modalPhoto" style="position:absolute;top:-14px;right:-14px;width:34px;height:34px;border-radius:50%;background:#fff;border:none;font-size:18px;box-shadow:0 2px 10px rgba(0,0,0,.25);z-index:2;">✕</button>
+    <img id="modalPhotoImg" src="" style="max-width:92vw;max-height:52vh;border-radius:16px;display:block;object-fit:contain;">
+    <textarea id="photoShareMsg" rows="3" style="width:100%;max-width:420px;border-radius:12px;border:1.5px solid var(--line);padding:10px;font-family:inherit;font-size:13.5px;resize:vertical;"></textarea>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+      <button id="waSharePhotoBtn" class="primary-btn whatsapp-btn" style="width:auto;padding:10px 18px;">💬 Enviar por WhatsApp</button>
+      <button id="sharePhotoBtn" class="primary-btn" style="width:auto;padding:10px 18px;">📤 Compartir</button>
+      <button id="downloadPhotoBtn" class="secondary-btn" style="width:auto;padding:10px 18px;">⬇️ Descargar</button>
+    </div>
   </div>
 </div>
 
@@ -482,7 +502,7 @@ function renderMenu(){
   if(items.length===0){ grid.innerHTML = `<div class="empty-note">No hay platos en esta categoría todavía.</div>`; return; }
   grid.innerHTML = items.map(i=>`
     <div class="item-card">
-      <div class="item-emoji" ${i.image ? `data-photo="${i.image}"` : ''}>${i.image ? `<img src="${i.image}" alt="${i.name}">` : (i.emoji||'🍽️')}</div>
+      <div class="item-emoji" ${i.image ? `data-photo="${i.image}" data-pname="${i.name.replace(/"/g,'&quot;')}" data-pprice="${money(i.price)}"` : ''}>${i.image ? `<img src="${i.image}" alt="${i.name}">` : (i.emoji||'🍽️')}</div>
       <div class="item-name">${i.name}</div>
       <div class="item-price">${money(i.price)}</div>
       <button class="add-btn" data-add="${i.id}">Agregar</button>
@@ -493,14 +513,70 @@ function renderMenu(){
   });
   grid.querySelectorAll('[data-photo]').forEach(el=>{
     el.style.cursor = 'zoom-in';
-    el.addEventListener('click', ()=> openPhoto(el.dataset.photo));
+    el.addEventListener('click', ()=> openPhoto(el.dataset.photo, el.dataset.pname, el.dataset.pprice));
   });
 }
 
-function openPhoto(src){
+function openPhoto(src, name, price){
   document.getElementById('modalPhotoImg').src = src;
+  document.getElementById('sharePhotoBtn').dataset.src = src;
+  document.getElementById('downloadPhotoBtn').dataset.src = src;
+  document.getElementById('waSharePhotoBtn').dataset.src = src;
+  const defaultMsg = name
+    ? `¡Te invito a probar este delicioso plato! 🍽️\n*${name}*${price? ' - '+price : ''}\nEn Delicias Jasibe 🍔\nPide desde tu celular 👉`
+    : `¡Mira este plato de Delicias Jasibe! 🍔`;
+  document.getElementById('photoShareMsg').value = defaultMsg;
   openModal('modalPhoto');
 }
+
+document.getElementById('waSharePhotoBtn').addEventListener('click', ()=>{
+  const src = document.getElementById('waSharePhotoBtn').dataset.src;
+  const msg = document.getElementById('photoShareMsg').value.trim();
+  const text = encodeURIComponent(msg + (src ? `\n${src}` : ''));
+  // Sin número: WhatsApp deja elegir a quién enviarlo (contacto, grupo o estado), funciona igual en PC y celular.
+  window.open(`https://wa.me/?text=${text}`, '_blank');
+});
+
+document.getElementById('downloadPhotoBtn').addEventListener('click', async ()=>{
+  const src = document.getElementById('downloadPhotoBtn').dataset.src;
+  if(!src) return;
+  try{
+    const resp = await fetch(src);
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'delicias-jasibe-plato.jpg';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }catch(e){
+    window.open(src, '_blank');
+  }
+});
+
+document.getElementById('sharePhotoBtn').addEventListener('click', async ()=>{
+  const src = document.getElementById('sharePhotoBtn').dataset.src;
+  const msg = document.getElementById('photoShareMsg').value.trim();
+  if(!src) return;
+  try{
+    const resp = await fetch(src);
+    const blob = await resp.blob();
+    const file = new File([blob], 'delicias-jasibe-plato.jpg', { type: blob.type || 'image/jpeg' });
+    if(navigator.canShare && navigator.canShare({ files:[file] })){
+      await navigator.share({ files:[file], title:'Delicias Jasibe', text: msg });
+      return;
+    }
+    if(navigator.share){
+      await navigator.share({ title:'Delicias Jasibe', text: msg, url: src });
+      return;
+    }
+    throw new Error('share not supported');
+  }catch(e){
+    showToast("Tu navegador no permite compartir directo. Usa 'Enviar por WhatsApp' o 'Descargar'.");
+  }
+});
 
 /* ================= CARRITO ================= */
 function addToCart(itemId){
@@ -572,9 +648,20 @@ document.getElementById('payOptions').addEventListener('click', (e)=>{
   const opt = e.target.closest('.pay-opt');
   if(!opt) return;
   selectedPay = opt.dataset.pay;
-  document.querySelectorAll('.pay-opt').forEach(o=>o.classList.toggle('selected', o===opt));
+  document.querySelectorAll('#payOptions .pay-opt').forEach(o=>o.classList.toggle('selected', o===opt));
 });
-document.querySelector('.pay-opt[data-pay="efectivo"]').classList.add('selected');
+document.querySelector('#payOptions .pay-opt[data-pay="efectivo"]').classList.add('selected');
+
+let selectedEntrega = "restaurante";
+document.getElementById('entregaOptions').addEventListener('click', (e)=>{
+  const opt = e.target.closest('.pay-opt');
+  if(!opt) return;
+  selectedEntrega = opt.dataset.entrega;
+  document.querySelectorAll('#entregaOptions .pay-opt').forEach(o=>o.classList.toggle('selected', o===opt));
+  document.getElementById('ckDireccionWrap').classList.toggle('hidden', selectedEntrega!=='domicilio');
+});
+document.querySelector('#entregaOptions .pay-opt[data-entrega="restaurante"]').classList.add('selected');
+document.getElementById('ckDireccionWrap').classList.add('hidden');
 
 document.getElementById('ckCedula').addEventListener('blur', ()=>{
   const ced = document.getElementById('ckCedula').value.trim();
@@ -592,13 +679,19 @@ document.getElementById('submitOrderBtn').addEventListener('click', async ()=>{
   const nombre = document.getElementById('ckNombre').value.trim();
   const telefono = document.getElementById('ckTelefono').value.trim();
   const cedula = document.getElementById('ckCedula').value.trim();
-  const direccion = document.getElementById('ckDireccion').value.trim();
+  let direccion = document.getElementById('ckDireccion').value.trim();
   const notas = document.getElementById('ckNotas').value.trim();
   const errEl = document.getElementById('checkoutError');
-  if(!nombre || !telefono || !cedula || !direccion){
-    errEl.textContent = "Por favor completa nombre, teléfono, cédula y dirección.";
+  if(!nombre || !telefono || !cedula){
+    errEl.textContent = "Por favor completa nombre, teléfono y cédula.";
     return;
   }
+  if(selectedEntrega==='domicilio' && !direccion){
+    errEl.textContent = "Por favor escribe la dirección de entrega.";
+    return;
+  }
+  if(selectedEntrega==='restaurante') direccion = "Come aquí en el restaurante";
+  if(selectedEntrega==='recoger') direccion = "Pasa a buscarlo al restaurante";
   errEl.textContent = "";
 
   orders = await loadOrders(); // refrescar antes de escribir
@@ -606,7 +699,7 @@ document.getElementById('submitOrderBtn').addEventListener('click', async ()=>{
   const order = {
     id: uid('ord-'),
     folio: folioNum,
-    cliente: {nombre, telefono, cedula, direccion},
+    cliente: {nombre, telefono, cedula, direccion, tipoEntrega: selectedEntrega},
     items: cart.map(c=>({name:c.name, price:c.price, qty:c.qty})),
     notas,
     total: cartTotal(),
@@ -622,6 +715,18 @@ document.getElementById('submitOrderBtn').addEventListener('click', async ()=>{
   cart = [];
   renderCartBar();
   closeModal('modalCheckout');
+
+  // Limpiar el formulario para que el siguiente cliente no herede estos datos
+  document.getElementById('ckCedula').value = '';
+  document.getElementById('ckNombre').value = '';
+  document.getElementById('ckTelefono').value = '';
+  document.getElementById('ckDireccion').value = '';
+  document.getElementById('ckNotas').value = '';
+  selectedEntrega = 'restaurante';
+  document.querySelectorAll('#entregaOptions .pay-opt').forEach(o=>o.classList.toggle('selected', o.dataset.entrega==='restaurante'));
+  document.getElementById('ckDireccionWrap').classList.add('hidden');
+  selectedPay = 'efectivo';
+  document.querySelectorAll('#payOptions .pay-opt').forEach(o=>o.classList.toggle('selected', o.dataset.pay==='efectivo'));
 
   document.getElementById('confirmText').textContent =
     `Pedido #${orderForConfirm.folio} por ${money(orderForConfirm.total)}. Lo verás reflejado en la cocina en unos segundos.`;
@@ -654,7 +759,7 @@ function buildWhatsAppLink(order){
 function renderCocina(){
   const wrap = document.getElementById('cocinaList');
   const activos = orders
-    .filter(o=>o.estado!=='despachado')
+    .filter(o=>o.estado!=='despachado' && o.estado!=='rechazado' && o.estado!=='suspendido')
     .sort((a,b)=> new Date(a.createdAt) - new Date(b.createdAt));
   if(activos.length===0){ wrap.innerHTML = `<div class="empty-note">No hay pedidos activos.</div>`; return; }
   wrap.innerHTML = activos.map(o=>ticketHTML(o, true)).join('');
@@ -665,10 +770,11 @@ function renderCocina(){
     b.addEventListener('click', ()=>markPaid(b.dataset.pay));
   });
 }
-function ticketHTML(o, showActions){
+function ticketHTML(o, showActions, isAdmin){
   const elapsed = Math.max(0, Math.round((Date.now() - new Date(o.createdAt).getTime())/60000));
-  const estadoLabel = {recibido:'Recibido', preparacion:'En preparación', despachado:'Despachado'}[o.estado];
+  const estadoLabel = {recibido:'Recibido', preparacion:'En preparación', despachado:'Despachado', rechazado:'Rechazado', suspendido:'Suspendido'}[o.estado];
   const nextLabel = {recibido:'Pasar a preparación', preparacion:'Marcar despachado'}[o.estado] || '';
+  const isTerminalBad = o.estado==='rechazado' || o.estado==='suspendido';
   return `
     <div class="ticket">
       <div class="ticket-head">
@@ -680,7 +786,7 @@ function ticketHTML(o, showActions){
         <span>Total</span><span>${money(o.total)}</span>
       </div>
       ${o.notas ? `<div class="ticket-cust">📝 ${o.notas}</div>` : ''}
-      <div class="ticket-cust">${o.cliente.nombre} · ${o.cliente.telefono}<br>${o.cliente.direccion}</div>
+      <div class="ticket-cust">${({restaurante:'🏠',recoger:'🚶',domicilio:'🛵'})[o.cliente.tipoEntrega]||''} ${o.cliente.nombre} · ${o.cliente.telefono}<br>${o.cliente.direccion}</div>
       <div class="status-row">
         <span class="tag-pill tag-${o.estado}">${estadoLabel}</span>
         <span class="tag-pill tag-${o.estadoPago}">${o.estadoPago==='pagado'?'Pagado':'Pago pendiente'}</span>
@@ -688,8 +794,15 @@ function ticketHTML(o, showActions){
       </div>
       ${showActions ? `
       <div class="ticket-actions">
-        ${o.estado!=='despachado' ? `<button class="btn-advance" data-advance="${o.id}">${nextLabel}</button>`:''}
+        ${(!isTerminalBad && o.estado!=='despachado' && nextLabel) ? `<button class="btn-advance" data-advance="${o.id}">${nextLabel}</button>`:''}
         ${o.estadoPago!=='pagado' ? `<button class="btn-pay" data-pay="${o.id}">Marcar pagado</button>`:''}
+      </div>` : ''}
+      ${isAdmin ? `
+      <div class="ticket-actions" style="margin-top:8px;flex-wrap:wrap;">
+        ${!isTerminalBad ? `<button class="btn-reject" data-reject="${o.id}">Rechazar</button>`:''}
+        ${!isTerminalBad ? `<button class="btn-suspend" data-suspend="${o.id}">Suspender</button>`:''}
+        ${isTerminalBad ? `<button class="btn-reactivate" data-reactivate="${o.id}">Reactivar</button>`:''}
+        <button class="btn-delete" data-delete-order="${o.id}">🗑️ Eliminar</button>
       </div>` : ''}
     </div>
   `;
@@ -712,6 +825,45 @@ async function markPaid(orderId){
   await saveOrders(orders);
   renderCocina();
   if(adminLoggedIn) renderAdmin();
+}
+async function rejectOrder(orderId){
+  orders = await loadOrders();
+  const o = orders.find(x=>x.id===orderId);
+  if(!o) return;
+  o.estado = 'rechazado';
+  await saveOrders(orders);
+  renderCocina();
+  if(adminLoggedIn) renderAdmin();
+  showToast("Pedido rechazado");
+}
+async function suspendOrder(orderId){
+  orders = await loadOrders();
+  const o = orders.find(x=>x.id===orderId);
+  if(!o) return;
+  o.estado = 'suspendido';
+  await saveOrders(orders);
+  renderCocina();
+  if(adminLoggedIn) renderAdmin();
+  showToast("Pedido suspendido");
+}
+async function reactivateOrder(orderId){
+  orders = await loadOrders();
+  const o = orders.find(x=>x.id===orderId);
+  if(!o) return;
+  o.estado = 'recibido';
+  await saveOrders(orders);
+  renderCocina();
+  if(adminLoggedIn) renderAdmin();
+  showToast("Pedido reactivado");
+}
+async function deleteOrder(orderId){
+  if(!confirm("¿Eliminar este pedido? Esta acción no se puede deshacer.")) return;
+  orders = await loadOrders();
+  orders = orders.filter(x=>x.id!==orderId);
+  await saveOrders(orders);
+  renderCocina();
+  if(adminLoggedIn) renderAdmin();
+  showToast("Pedido eliminado");
 }
 
 /* polling para cocina */
@@ -778,9 +930,13 @@ function renderAdminPedidos(){
   const wrap = document.getElementById('adminOrdersList');
   const list = [...orders].sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
   if(list.length===0){ wrap.innerHTML = `<div class="empty-admin">Todavía no hay pedidos.</div>`; return; }
-  wrap.innerHTML = list.map(o=>ticketHTML(o, true)).join('');
+  wrap.innerHTML = list.map(o=>ticketHTML(o, true, true)).join('');
   wrap.querySelectorAll('[data-advance]').forEach(b=>b.addEventListener('click', ()=>advanceOrder(b.dataset.advance)));
   wrap.querySelectorAll('[data-pay]').forEach(b=>b.addEventListener('click', ()=>markPaid(b.dataset.pay)));
+  wrap.querySelectorAll('[data-reject]').forEach(b=>b.addEventListener('click', ()=>rejectOrder(b.dataset.reject)));
+  wrap.querySelectorAll('[data-suspend]').forEach(b=>b.addEventListener('click', ()=>suspendOrder(b.dataset.suspend)));
+  wrap.querySelectorAll('[data-reactivate]').forEach(b=>b.addEventListener('click', ()=>reactivateOrder(b.dataset.reactivate)));
+  wrap.querySelectorAll('[data-delete-order]').forEach(b=>b.addEventListener('click', ()=>deleteOrder(b.dataset.deleteOrder)));
 }
 
 function renderCreditos(){
