@@ -191,6 +191,45 @@
   .btn-reactivate{background:var(--mustard);color:var(--ink);}
   .btn-delete{background:#fff;color:var(--danger);border:1.5px solid var(--danger);}
 
+  /* ---------- Cooking animation ---------- */
+  .cooking-banner{
+    background:linear-gradient(135deg,#FFF3DC,#FFE7C2);
+    border-radius:16px;padding:16px 12px 14px;margin-bottom:14px;text-align:center;
+    overflow:hidden;
+  }
+  .cooking-scene{position:relative;height:56px;margin-bottom:6px;}
+  .cooking-pot{
+    position:absolute;left:8px;top:2px;font-size:30px;
+    animation:potWiggle 1.4s ease-in-out infinite;
+  }
+  .steam{
+    position:absolute;left:22px;top:-6px;font-size:20px;font-weight:900;color:#C9B79C;
+    animation:steamRise 1.6s ease-in infinite;opacity:0;
+  }
+  .steam.s2{left:32px;animation-delay:.4s;}
+  .steam.s3{left:12px;animation-delay:.8s;}
+  @keyframes steamRise{
+    0%{opacity:0;transform:translateY(0) scale(.8);}
+    30%{opacity:.9;}
+    100%{opacity:0;transform:translateY(-22px) scale(1.3);}
+  }
+  @keyframes potWiggle{
+    0%,100%{transform:rotate(0deg);}
+    50%{transform:rotate(-6deg);}
+  }
+  .cooking-runner{
+    position:absolute;top:6px;font-size:28px;left:-40px;
+    animation:runAcross 2.6s linear infinite;
+  }
+  @keyframes runAcross{
+    0%{left:-40px;transform:scaleX(1);}
+    48%{transform:scaleX(1);}
+    50%{left:calc(100% - 10px);transform:scaleX(-1);}
+    98%{transform:scaleX(-1);}
+    100%{left:-40px;transform:scaleX(1);}
+  }
+  .cooking-text{font-weight:700;font-size:14.5px;color:var(--chili-dark);}
+
   /* ---------- Admin ---------- */
   .login-box{max-width:340px;margin:60px auto;background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:24px;text-align:center;}
   .login-box .logo{font-size:34px;}
@@ -270,6 +309,7 @@
       <button data-atab="cuentas" class="active">📊 Cuentas</button>
       <button data-atab="pedidos">🧾 Pedidos</button>
       <button data-atab="creditos">📝 Créditos</button>
+      <button data-atab="clientes">🧑‍🤝‍🧑 Clientes</button>
       <button data-atab="menu">🍔 Menú</button>
     </div>
 
@@ -288,6 +328,10 @@
 
     <div id="atab-creditos" class="hidden">
       <div id="creditList"></div>
+    </div>
+
+    <div id="atab-clientes" class="hidden">
+      <div id="clientesList"></div>
     </div>
 
     <div id="atab-menu" class="hidden">
@@ -340,6 +384,7 @@
     <div class="sheet-head"><h2>Tus datos</h2><button class="close-x" data-close="modalCheckout">✕</button></div>
     <label class="field">Cédula</label>
     <input type="text" id="ckCedula" placeholder="8-123-4567">
+    <div id="ckClienteWarn" class="hidden" style="font-size:12.5px;font-weight:700;margin:4px 0;padding:8px 10px;border-radius:10px;background:#FDE8E8;color:var(--danger);"></div>
     <label class="field">Nombre completo</label>
     <input type="text" id="ckNombre" placeholder="Nombre y apellido">
     <label class="field">Teléfono</label>
@@ -370,6 +415,13 @@
 <div id="modalConfirm" class="overlay hidden">
   <div class="sheet">
     <div class="sheet-head"><h2>¡Pedido enviado! 🎉</h2><button class="close-x" data-close="modalConfirm">✕</button></div>
+    <div class="cooking-banner">
+      <div class="cooking-scene">
+        <div class="cooking-pot">🍳<span class="steam s1">·</span><span class="steam s2">·</span><span class="steam s3">·</span></div>
+        <div class="cooking-runner">🏃‍♂️💨</div>
+      </div>
+      <div class="cooking-text">¡Comenzamos a preparar tu comida!</div>
+    </div>
     <p id="confirmText" style="font-size:14px;color:var(--ink-soft);"></p>
     <button class="primary-btn whatsapp-btn" id="waBtn">Enviar por WhatsApp</button>
     <button class="secondary-btn" data-close="modalConfirm">Listo</button>
@@ -406,6 +458,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 /* ================= STATE ================= */
 let menu = [];
 let orders = [];
+let clients = {};
 let cart = [];
 let currentCategory = "Todos";
 let selectedPay = "efectivo";
@@ -450,6 +503,19 @@ async function loadOrders(){
 async function saveOrders(o){
   try{
     await supabaseClient.from('orders').upsert({ id:'orders', data:o, updated_at: new Date().toISOString() });
+  }catch(e){ console.error(e); }
+}
+async function loadClients(){
+  try{
+    const { data, error } = await supabaseClient.from('clients').select('data').eq('id','clients').maybeSingle();
+    if(error) throw error;
+    if(data && data.data) return data.data;
+  }catch(e){ console.error(e); }
+  return {};
+}
+async function saveClients(c){
+  try{
+    await supabaseClient.from('clients').upsert({ id:'clients', data:c, updated_at: new Date().toISOString() });
   }catch(e){ console.error(e); }
 }
 
@@ -663,7 +729,7 @@ document.getElementById('entregaOptions').addEventListener('click', (e)=>{
 document.querySelector('#entregaOptions .pay-opt[data-entrega="restaurante"]').classList.add('selected');
 document.getElementById('ckDireccionWrap').classList.add('hidden');
 
-document.getElementById('ckCedula').addEventListener('blur', ()=>{
+document.getElementById('ckCedula').addEventListener('blur', async ()=>{
   const ced = document.getElementById('ckCedula').value.trim();
   if(!ced) return;
   const prev = [...orders].reverse().find(o=>o.cliente.cedula===ced);
@@ -672,6 +738,21 @@ document.getElementById('ckCedula').addEventListener('blur', ()=>{
     document.getElementById('ckTelefono').value = prev.cliente.telefono;
     document.getElementById('ckDireccion').value = prev.cliente.direccion;
     showToast("Cliente encontrado, datos autocompletados");
+  }
+  const info = (await loadClients())[ced];
+  const warnEl = document.getElementById('ckClienteWarn');
+  if(info && info.rating==='malo'){
+    warnEl.textContent = `⚠️ Este cliente NO recogió su pedido la última vez.${info.note ? ' Nota: '+info.note : ''}`;
+    warnEl.style.background = '#FDE8E8';
+    warnEl.style.color = 'var(--danger)';
+    warnEl.classList.remove('hidden');
+  }else if(info && info.rating==='bueno'){
+    warnEl.textContent = `👍 Cliente confiable.`;
+    warnEl.style.background = '#DFF2EE';
+    warnEl.style.color = 'var(--basil)';
+    warnEl.classList.remove('hidden');
+  }else{
+    warnEl.classList.add('hidden');
   }
 });
 
@@ -722,6 +803,7 @@ document.getElementById('submitOrderBtn').addEventListener('click', async ()=>{
   document.getElementById('ckTelefono').value = '';
   document.getElementById('ckDireccion').value = '';
   document.getElementById('ckNotas').value = '';
+  document.getElementById('ckClienteWarn').classList.add('hidden');
   selectedEntrega = 'restaurante';
   document.querySelectorAll('#entregaOptions .pay-opt').forEach(o=>o.classList.toggle('selected', o.dataset.entrega==='restaurante'));
   document.getElementById('ckDireccionWrap').classList.add('hidden');
@@ -786,7 +868,7 @@ function ticketHTML(o, showActions, isAdmin){
         <span>Total</span><span>${money(o.total)}</span>
       </div>
       ${o.notas ? `<div class="ticket-cust">📝 ${o.notas}</div>` : ''}
-      <div class="ticket-cust">${({restaurante:'🏠',recoger:'🚶',domicilio:'🛵'})[o.cliente.tipoEntrega]||''} ${o.cliente.nombre} · ${o.cliente.telefono}<br>${o.cliente.direccion}</div>
+      <div class="ticket-cust">${({restaurante:'🏠',recoger:'🚶',domicilio:'🛵'})[o.cliente.tipoEntrega]||''} ${o.cliente.nombre} · ${o.cliente.telefono}${clients[o.cliente.cedula]?.rating==='malo' ? ' <b style="color:var(--danger);">⚠️ No recogió antes</b>' : clients[o.cliente.cedula]?.rating==='bueno' ? ' <b style="color:var(--basil);">👍</b>' : ''}<br>${o.cliente.direccion}</div>
       <div class="status-row">
         <span class="tag-pill tag-${o.estado}">${estadoLabel}</span>
         <span class="tag-pill tag-${o.estadoPago}">${o.estadoPago==='pagado'?'Pagado':'Pago pendiente'}</span>
@@ -891,7 +973,7 @@ document.getElementById('adminTabs').addEventListener('click', (e)=>{
   if(!btn) return;
   currentAdminTab = btn.dataset.atab;
   document.querySelectorAll('#adminTabs button').forEach(b=>b.classList.toggle('active', b===btn));
-  ['cuentas','pedidos','creditos','menu'].forEach(t=>{
+  ['cuentas','pedidos','creditos','clientes','menu'].forEach(t=>{
     document.getElementById('atab-'+t).classList.toggle('hidden', t!==currentAdminTab);
   });
   renderAdmin();
@@ -903,6 +985,7 @@ async function renderAdmin(){
   if(currentAdminTab==='cuentas') renderCuentas();
   if(currentAdminTab==='pedidos') renderAdminPedidos();
   if(currentAdminTab==='creditos') renderCreditos();
+  if(currentAdminTab==='clientes'){ clients = await loadClients(); renderClientes(); }
   if(currentAdminTab==='menu') renderMenuAdmin();
 }
 
@@ -981,6 +1064,65 @@ function renderCreditos(){
       renderCreditos();
       renderCuentas();
       showToast("Crédito saldado");
+    });
+  });
+}
+
+/* ---- Admin: clientes ---- */
+function renderClientes(){
+  const wrap = document.getElementById('clientesList');
+  const byClient = {};
+  orders.forEach(o=>{
+    const key = o.cliente.cedula;
+    if(!key) return;
+    if(!byClient[key]) byClient[key] = { cliente:o.cliente, count:0, total:0 };
+    byClient[key].count += 1;
+    byClient[key].total += o.total;
+  });
+  const list = Object.values(byClient).sort((a,b)=> b.count - a.count);
+  if(list.length===0){ wrap.innerHTML = `<div class="empty-admin">Todavía no hay clientes registrados.</div>`; return; }
+  wrap.innerHTML = list.map(g=>{
+    const ced = g.cliente.cedula;
+    const info = clients[ced] || { rating:'', note:'' };
+    const badge = info.rating==='bueno' ? `<span class="tag-pill" style="background:#DFF2EE;color:var(--basil);">👍 Buen cliente</span>`
+      : info.rating==='malo' ? `<span class="tag-pill" style="background:#FDE8E8;color:var(--danger);">⚠️ No recogió pedido</span>`
+      : `<span class="tag-pill" style="background:#F1EAE0;color:var(--ink-soft);">Sin clasificar</span>`;
+    return `
+      <div class="card">
+        <div class="row-between">
+          <div>
+            <div style="font-weight:700;">${g.cliente.nombre}</div>
+            <div style="font-size:12px;color:var(--ink-soft);">${g.cliente.telefono} · Cédula ${ced}</div>
+            <div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">${g.count} pedido(s) · ${money(g.total)} en total</div>
+          </div>
+          <div style="text-align:right;">${badge}</div>
+        </div>
+        <textarea data-note="${ced}" placeholder="Nota (opcional, ej: dejó el pedido el 10 de agosto)" style="width:100%;margin-top:8px;border-radius:10px;border:1.5px solid var(--line);padding:8px;font-family:inherit;font-size:12.5px;">${info.note||''}</textarea>
+        <div class="ticket-actions" style="margin-top:8px;">
+          <button class="btn-pay" data-rate="${ced}" data-value="bueno">👍 Buen cliente</button>
+          <button class="btn-reject" data-rate="${ced}" data-value="malo">⚠️ No recogió</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+  wrap.querySelectorAll('[data-rate]').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      const ced = b.dataset.rate;
+      const value = b.dataset.value;
+      const noteEl = wrap.querySelector(`[data-note="${ced}"]`);
+      clients = await loadClients();
+      clients[ced] = { rating:value, note: noteEl ? noteEl.value.trim() : (clients[ced]?.note||'') };
+      await saveClients(clients);
+      showToast("Cliente clasificado");
+      renderClientes();
+    });
+  });
+  wrap.querySelectorAll('[data-note]').forEach(t=>{
+    t.addEventListener('blur', async ()=>{
+      const ced = t.dataset.note;
+      clients = await loadClients();
+      clients[ced] = { rating: clients[ced]?.rating||'', note: t.value.trim() };
+      await saveClients(clients);
     });
   });
 }
@@ -1079,6 +1221,7 @@ function renderMenuAdmin(){
 async function init(){
   menu = await loadMenu();
   orders = await loadOrders();
+  clients = await loadClients();
   renderChips();
   renderMenu();
   renderCartBar();
