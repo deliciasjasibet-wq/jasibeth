@@ -214,6 +214,7 @@
 </style>
 </head>
 <body>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <header class="topbar">
   <div class="brand-row">
@@ -366,6 +367,11 @@ const CREDIT_DAYS_LIMIT = 15; // días para considerar un fiado vencido
 const ADMIN_USER = "Keren";
 const ADMIN_PASS = "8888";
 
+/* ================= SUPABASE ================= */
+const SUPABASE_URL = "https://vgjtrhuwnqtlvxmrmixj.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZnanRyaHV3bnF0bHZ4bXJtaXhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MDAzMzksImV4cCI6MjEwMzA3NjMzOX0.AhuNHU4sDx7SsdTkdMc4WT6LkNo2je5ZTjj9KBeMQMs";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 /* ================= STATE ================= */
 let menu = [];
 let orders = [];
@@ -387,27 +393,33 @@ const DEFAULT_MENU = [
   {id:"m9",name:"Combo Doble",category:"Combos",price:8.00,emoji:"🍟",active:true},
 ];
 
-/* ================= STORAGE HELPERS ================= */
+/* ================= STORAGE HELPERS (Supabase) ================= */
 async function loadMenu(){
   try{
-    const r = await window.storage.get('menu', true);
-    if(r && r.value) return JSON.parse(r.value);
-  }catch(e){}
+    const { data, error } = await supabaseClient.from('menu').select('data').eq('id','menu').maybeSingle();
+    if(error) throw error;
+    if(data && data.data) return data.data;
+  }catch(e){ console.error(e); }
   await saveMenu(DEFAULT_MENU);
   return DEFAULT_MENU.slice();
 }
 async function saveMenu(m){
-  try{ await window.storage.set('menu', JSON.stringify(m), true); }catch(e){ console.error(e); }
+  try{
+    await supabaseClient.from('menu').upsert({ id:'menu', data:m, updated_at: new Date().toISOString() });
+  }catch(e){ console.error(e); }
 }
 async function loadOrders(){
   try{
-    const r = await window.storage.get('orders', true);
-    if(r && r.value) return JSON.parse(r.value);
-  }catch(e){}
+    const { data, error } = await supabaseClient.from('orders').select('data').eq('id','orders').maybeSingle();
+    if(error) throw error;
+    if(data && data.data) return data.data;
+  }catch(e){ console.error(e); }
   return [];
 }
 async function saveOrders(o){
-  try{ await window.storage.set('orders', JSON.stringify(o), true); }catch(e){ console.error(e); }
+  try{
+    await supabaseClient.from('orders').upsert({ id:'orders', data:o, updated_at: new Date().toISOString() });
+  }catch(e){ console.error(e); }
 }
 
 function uid(prefix){ return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
