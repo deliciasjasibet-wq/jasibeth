@@ -272,6 +272,14 @@
     pointer-events:none;
   }
   .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px);}
+  .undo-bar{
+    position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;padding:10px 10px 10px 18px;border-radius:999px;
+    font-size:13px;font-weight:600;z-index:81;display:flex;align-items:center;gap:10px;
+    opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;box-shadow:0 6px 18px rgba(0,0,0,.25);
+  }
+  .undo-bar.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
+  .undo-bar button{background:var(--mustard);color:var(--ink);border:none;border-radius:999px;padding:7px 14px;font-weight:700;font-size:12.5px;}
   .section-title{font-size:13px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;margin:18px 0 8px;}
   .empty-admin{color:var(--ink-soft);font-size:13px;padding:16px 0;text-align:center;}
 </style>
@@ -291,7 +299,6 @@
   </div>
   <nav class="tabs" id="mainTabs">
     <button data-view="cliente" class="active">🍽️ Menú</button>
-    <button data-view="cocina">👨‍🍳 Cocina</button>
     <button data-view="admin">🔒 Admin</button>
   </nav>
 </header>
@@ -301,12 +308,6 @@
   <div id="scheduleBanner" class="schedule-banner"></div>
   <div class="chips" id="catChips"></div>
   <div class="menu-grid" id="menuGrid"></div>
-</main>
-
-<!-- ================= COCINA ================= -->
-<main id="view-cocina" class="hidden">
-  <h2 style="margin:4px 0 12px;">Pedidos activos</h2>
-  <div id="cocinaList"></div>
 </main>
 
 <!-- ================= ADMIN ================= -->
@@ -324,14 +325,20 @@
 
   <div id="adminPanel" class="hidden">
     <div class="admin-tabs" id="adminTabs">
-      <button data-atab="cuentas" class="active">📊 Cuentas</button>
+      <button data-atab="cocina" class="active">👨‍🍳 Cocina</button>
+      <button data-atab="cuentas">📊 Cuentas</button>
       <button data-atab="pedidos">🧾 Pedidos</button>
       <button data-atab="creditos">📝 Créditos</button>
       <button data-atab="clientes">🧑‍🤝‍🧑 Clientes</button>
+      <button data-atab="eliminados">🗑️ Eliminados</button>
       <button data-atab="menu">🍔 Menú</button>
     </div>
 
-    <div id="atab-cuentas">
+    <div id="atab-cocina">
+      <div id="cocinaList"></div>
+    </div>
+
+    <div id="atab-cuentas" class="hidden">
       <div class="card" style="margin-bottom:14px;">
         <div class="section-title" style="margin-top:0;">🕐 Horario de atención</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
@@ -365,6 +372,11 @@
 
     <div id="atab-clientes" class="hidden">
       <div id="clientesList"></div>
+    </div>
+
+    <div id="atab-eliminados" class="hidden">
+      <div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px;">Pedidos eliminados de Cocina o Admin. Solo tú (Admin) puedes verlos y recuperarlos.</div>
+      <div id="eliminadosList"></div>
     </div>
 
     <div id="atab-menu" class="hidden">
@@ -480,6 +492,10 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="undo-bar" id="undoBar">
+  <span id="undoBarText">Pedido eliminado</span>
+  <button id="undoBarBtn">↩️ Deshacer</button>
+</div>
 
 <script>
 /* ================= CONFIG ================= */
@@ -499,12 +515,13 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 let menu = [];
 let orders = [];
 let clients = {};
+let deletedOrdersList = [];
 let settings = { horario: { open:"17:00", close:"00:00" } };
 let cart = [];
 let currentCategory = "Todos";
 let selectedPay = "efectivo";
 let adminLoggedIn = false;
-let currentAdminTab = "cuentas";
+let currentAdminTab = "cocina";
 
 const DEFAULT_MENU = [
   {id:"m1",name:"Hamburguesa Clásica",category:"Hamburguesas",price:3.50,emoji:"🍔",active:true},
@@ -572,9 +589,28 @@ async function saveSettings(s){
     await supabaseClient.from('settings').upsert({ id:'settings', data:s, updated_at: new Date().toISOString() });
   }catch(e){ console.error(e); }
 }
+async function loadDeletedOrders(){
+  try{
+    const { data, error } = await supabaseClient.from('deleted_orders').select('data').eq('id','deleted_orders').maybeSingle();
+    if(error) throw error;
+    if(data && data.data) return data.data;
+  }catch(e){ console.error(e); }
+  return [];
+}
+async function saveDeletedOrders(d){
+  try{
+    await supabaseClient.from('deleted_orders').upsert({ id:'deleted_orders', data:d, updated_at: new Date().toISOString() });
+  }catch(e){ console.error(e); }
+}
 
 function uid(prefix){ return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
 function money(n){ return "$" + Number(n).toFixed(2); }
+function waChatLink(phone){
+  let digits = (phone||'').replace(/\D/g,'');
+  if(!digits) return '';
+  if(digits.length <= 8) digits = '507' + digits; // asume Panamá si no trae código de país
+  return `https://wa.me/${digits}`;
+}
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 function monthStr(){ return new Date().toISOString().slice(0,7); }
 
@@ -586,6 +622,22 @@ function showToast(msg, duration){
   t._hideTimer = setTimeout(()=>t.classList.remove('show'), duration || 1800);
 }
 
+function showUndoBar(text, onUndo, duration){
+  const bar = document.getElementById('undoBar');
+  const btn = document.getElementById('undoBarBtn');
+  document.getElementById('undoBarText').textContent = text;
+  bar.classList.add('show');
+  clearTimeout(bar._hideTimer);
+  const newBtn = btn.cloneNode(true); // limpia listeners anteriores
+  btn.parentNode.replaceChild(newBtn, btn);
+  newBtn.addEventListener('click', async ()=>{
+    bar.classList.remove('show');
+    clearTimeout(bar._hideTimer);
+    await onUndo();
+  });
+  bar._hideTimer = setTimeout(()=>bar.classList.remove('show'), duration || 8000);
+}
+
 /* ================= NAV ================= */
 document.getElementById('mainTabs').addEventListener('click', (e)=>{
   const btn = e.target.closest('button[data-view]');
@@ -593,7 +645,7 @@ document.getElementById('mainTabs').addEventListener('click', (e)=>{
   document.querySelectorAll('#mainTabs button').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   const view = btn.dataset.view;
-  ['cliente','cocina','admin'].forEach(v=>{
+  ['cliente','admin'].forEach(v=>{
     document.getElementById('view-'+v).classList.toggle('hidden', v!==view);
   });
   document.getElementById('cartbar').classList.toggle('hidden', view!=='cliente' || cart.length===0);
@@ -1066,7 +1118,7 @@ function ticketHTML(o, showActions, isAdmin, isKitchen){
         <span>Total</span><span>${money(o.total)}</span>
       </div>
       ${o.notas ? `<div class="ticket-cust">📝 ${o.notas}</div>` : ''}
-      <div class="ticket-cust">${({restaurante:'🏠',recoger:'🚶',domicilio:'🛵'})[o.cliente.tipoEntrega]||''} ${o.cliente.nombre} · ${o.cliente.telefono}${clients[o.cliente.cedula]?.rating==='malo' ? ' <b style="color:var(--danger);">⚠️ No recogió antes</b>' : clients[o.cliente.cedula]?.rating==='bueno' ? ' <b style="color:var(--basil);">👍</b>' : ''}<br>${o.cliente.direccion}</div>
+      <div class="ticket-cust">${({restaurante:'🏠',recoger:'🚶',domicilio:'🛵'})[o.cliente.tipoEntrega]||''} ${o.cliente.nombre} · <a href="${waChatLink(o.cliente.telefono)}" target="_blank" style="color:#1EA57E;font-weight:700;text-decoration:underline;">💬 ${o.cliente.telefono}</a>${clients[o.cliente.cedula]?.rating==='malo' ? ' <b style="color:var(--danger);">⚠️ No recogió antes</b>' : clients[o.cliente.cedula]?.rating==='bueno' ? ' <b style="color:var(--basil);">👍</b>' : ''}<br>${o.cliente.direccion}</div>
       <div class="status-row">
         <span class="tag-pill tag-${o.estado}">${estadoLabel}</span>
         <span class="tag-pill tag-${o.estadoPago}">${o.estadoPago==='pagado'?'Pagado':'Pago pendiente'}</span>
@@ -1142,19 +1194,44 @@ async function reactivateOrder(orderId){
   showToast("Pedido reactivado");
 }
 async function deleteOrder(orderId){
-  if(!confirm("¿Eliminar este pedido? Esta acción no se puede deshacer.")) return;
+  if(!confirm("¿Eliminar este pedido? Quedará guardado en el historial de eliminados (solo lo ve el Admin) y podrás deshacerlo por unos segundos.")) return;
   orders = await loadOrders();
-  orders = orders.filter(x=>x.id!==orderId);
+  const idx = orders.findIndex(x=>x.id===orderId);
+  if(idx===-1) return;
+  const order = orders[idx];
+  orders.splice(idx, 1);
+  await saveOrders(orders);
+  let deletedOrders = await loadDeletedOrders();
+  deletedOrders.unshift({ ...order, deletedAt: new Date().toISOString() });
+  await saveDeletedOrders(deletedOrders);
+  renderCocina();
+  if(adminLoggedIn) renderAdmin();
+  showUndoBar(`Pedido #${order.folio} eliminado`, ()=> restoreOrder(orderId));
+}
+
+async function restoreOrder(orderId){
+  let deletedOrders = await loadDeletedOrders();
+  const idx = deletedOrders.findIndex(x=>x.id===orderId);
+  if(idx===-1){ showToast("Ese pedido ya no está en el historial"); return; }
+  const order = { ...deletedOrders[idx] };
+  delete order.deletedAt;
+  deletedOrders.splice(idx, 1);
+  await saveDeletedOrders(deletedOrders);
+  orders = await loadOrders();
+  orders.push(order);
   await saveOrders(orders);
   renderCocina();
   if(adminLoggedIn) renderAdmin();
-  showToast("Pedido eliminado");
+  showToast(`Pedido #${order.folio} recuperado`);
 }
 
-/* polling para cocina */
+/* polling para cocina (dentro del panel de Admin) */
 setInterval(async ()=>{
-  const cocinaVisible = !document.getElementById('view-cocina').classList.contains('hidden');
-  if(cocinaVisible){ orders = await loadOrders(); renderCocina(); }
+  const adminVisible = !document.getElementById('view-admin').classList.contains('hidden');
+  if(adminLoggedIn && adminVisible && currentAdminTab==='cocina'){
+    orders = await loadOrders();
+    renderCocina();
+  }
 }, 6000);
 
 /* ================= ADMIN ================= */
@@ -1176,7 +1253,7 @@ document.getElementById('adminTabs').addEventListener('click', (e)=>{
   if(!btn) return;
   currentAdminTab = btn.dataset.atab;
   document.querySelectorAll('#adminTabs button').forEach(b=>b.classList.toggle('active', b===btn));
-  ['cuentas','pedidos','creditos','clientes','menu'].forEach(t=>{
+  ['cocina','cuentas','pedidos','creditos','clientes','eliminados','menu'].forEach(t=>{
     document.getElementById('atab-'+t).classList.toggle('hidden', t!==currentAdminTab);
   });
   renderAdmin();
@@ -1185,10 +1262,12 @@ document.getElementById('adminTabs').addEventListener('click', (e)=>{
 async function renderAdmin(){
   orders = await loadOrders();
   menu = await loadMenu();
+  if(currentAdminTab==='cocina'){ clients = await loadClients(); renderCocina(); }
   if(currentAdminTab==='cuentas'){ settings = await loadSettings(); renderCuentas(); }
   if(currentAdminTab==='pedidos') renderAdminPedidos();
   if(currentAdminTab==='creditos') renderCreditos();
   if(currentAdminTab==='clientes'){ clients = await loadClients(); renderClientes(); }
+  if(currentAdminTab==='eliminados'){ deletedOrdersList = await loadDeletedOrders(); renderEliminados(); }
   if(currentAdminTab==='menu') renderMenuAdmin();
 }
 
@@ -1258,7 +1337,7 @@ function renderCreditos(){
         <div class="row-between">
           <div>
             <div style="font-weight:700;">${g.cliente.nombre}</div>
-            <div style="font-size:12px;color:var(--ink-soft);">${g.cliente.telefono} · Cédula ${g.cliente.cedula}</div>
+            <div style="font-size:12px;color:var(--ink-soft);">💬 <a href="${waChatLink(g.cliente.telefono)}" target="_blank" style="color:inherit;text-decoration:underline;">${g.cliente.telefono}</a> · Cédula ${g.cliente.cedula}</div>
           </div>
           <div style="text-align:right;">
             <div style="font-weight:700;color:var(--chili-dark);">${money(total)}</div>
@@ -1308,7 +1387,7 @@ function renderClientes(){
         <div class="row-between">
           <div>
             <div style="font-weight:700;">${g.cliente.nombre}</div>
-            <div style="font-size:12px;color:var(--ink-soft);">${g.cliente.telefono} · Cédula ${ced}</div>
+            <div style="font-size:12px;color:var(--ink-soft);">💬 <a href="${waChatLink(g.cliente.telefono)}" target="_blank" style="color:inherit;text-decoration:underline;">${g.cliente.telefono}</a> · Cédula ${ced}</div>
             <div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">${g.count} pedido(s) · ${money(g.total)} en total</div>
           </div>
           <div style="text-align:right;">${badge}</div>
@@ -1339,6 +1418,40 @@ function renderClientes(){
       clients = await loadClients();
       clients[ced] = { rating: clients[ced]?.rating||'', note: t.value.trim() };
       await saveClients(clients);
+    });
+  });
+}
+
+/* ---- Admin: eliminados ---- */
+function renderEliminados(){
+  const wrap = document.getElementById('eliminadosList');
+  if(deletedOrdersList.length===0){ wrap.innerHTML = `<div class="empty-admin">No hay pedidos eliminados 🎉</div>`; return; }
+  const list = [...deletedOrdersList].sort((a,b)=> new Date(b.deletedAt) - new Date(a.deletedAt));
+  wrap.innerHTML = list.map(o=>{
+    const when = new Date(o.deletedAt);
+    const whenStr = when.toLocaleString('es-PA', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+    return `
+    <div class="card">
+      <div class="row-between">
+        <div style="font-weight:700;">Pedido #${o.folio}</div>
+        <div style="font-size:11px;color:var(--ink-soft);">Eliminado: ${whenStr}</div>
+      </div>
+      ${o.items.map(i=>`<div class="ticket-line"><span>${i.qty}x ${i.name}</span><span>${money(i.price*i.qty)}</span></div>`).join('')}
+      <div class="ticket-line" style="font-weight:700;border-top:1px dashed var(--line);margin-top:4px;padding-top:6px;">
+        <span>Total</span><span>${money(o.total)}</span>
+      </div>
+      <div style="font-size:12px;color:var(--ink-soft);margin-top:6px;">${o.cliente.nombre} · <a href="${waChatLink(o.cliente.telefono)}" target="_blank" style="color:#1EA57E;font-weight:700;text-decoration:underline;">💬 ${o.cliente.telefono}</a></div>
+      <div class="ticket-actions" style="margin-top:8px;">
+        <button class="btn-pay" data-restore="${o.id}">♻️ Recuperar pedido</button>
+      </div>
+    </div>
+  `;
+  }).join('');
+  wrap.querySelectorAll('[data-restore]').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      await restoreOrder(b.dataset.restore);
+      deletedOrdersList = await loadDeletedOrders();
+      renderEliminados();
     });
   });
 }
