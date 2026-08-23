@@ -80,12 +80,16 @@
     position:relative;
   }
   .item-emoji{
-    width:100%;aspect-ratio:3/4;border-radius:12px;overflow:hidden;
+    width:100%;aspect-ratio:3/4;border-radius:12px;overflow:hidden;position:relative;
     background:linear-gradient(135deg,var(--mustard),#ffd98a);
     display:flex;align-items:center;justify-content:center;font-size:34px;
   }
   .item-emoji img{width:100%;height:100%;object-fit:cover;display:block;}
   .item-emoji video{width:100%;height:100%;object-fit:cover;display:block;}
+  .media-count-badge{
+    position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,.65);color:#fff;
+    font-size:10.5px;font-weight:700;padding:3px 7px;border-radius:999px;
+  }
   .item-name{font-weight:700;font-size:14px;line-height:1.2;}
   .item-price{color:var(--chili-dark);font-weight:700;font-size:14px;}
   .add-btn{
@@ -433,10 +437,9 @@
         </div>
         <label class="field">Precio (USD)</label>
         <input type="text" id="newItemPrice" placeholder="Ej: 4.50">
-        <label class="field">Foto o video del plato (vertical, opcional)</label>
-        <input type="file" id="newItemPhoto" accept="image/jpeg,image/jpg,video/mp4,video/quicktime">
-        <img id="newItemPhotoPreview" class="hidden" style="width:140px;aspect-ratio:3/4;object-fit:cover;border-radius:12px;margin-top:8px;">
-        <video id="newItemVideoPreview" class="hidden" muted autoplay loop playsinline style="width:140px;aspect-ratio:3/4;object-fit:cover;border-radius:12px;margin-top:8px;"></video>
+        <label class="field">Fotos o videos del plato (vertical, puedes elegir varios)</label>
+        <input type="file" id="newItemPhoto" accept="image/jpeg,image/jpg,video/mp4,video/quicktime" multiple>
+        <div id="newItemMediaPreview" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;"></div>
         <label class="field">Emoji / ícono (se usa si no subes foto)</label>
         <input type="text" id="newItemEmoji" placeholder="🍔" maxlength="2">
         <label class="field">Mensaje al compartir (opcional)</label>
@@ -520,8 +523,11 @@
 <div id="modalPhoto" class="overlay hidden" style="align-items:center;justify-content:center;">
   <div style="position:relative;max-width:92vw;max-height:92vh;display:flex;flex-direction:column;align-items:center;gap:10px;">
     <button data-close="modalPhoto" style="position:absolute;top:-14px;right:-14px;width:34px;height:34px;border-radius:50%;background:#fff;border:none;font-size:18px;box-shadow:0 2px 10px rgba(0,0,0,.25);z-index:2;">✕</button>
-    <div id="photoZoomWrap" style="max-width:92vw;max-height:52vh;border-radius:16px;overflow:hidden;background:#111;display:flex;align-items:center;justify-content:center;">
+    <div id="photoZoomWrap" style="position:relative;max-width:92vw;max-height:52vh;border-radius:16px;overflow:hidden;background:#111;display:flex;align-items:center;justify-content:center;">
       <img id="modalPhotoImg" src="" style="max-width:92vw;max-height:52vh;display:block;object-fit:contain;touch-action:none;cursor:zoom-in;user-select:none;">
+      <button id="galleryPrevBtn" class="hidden" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.85);border:none;font-size:18px;">‹</button>
+      <button id="galleryNextBtn" class="hidden" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.85);border:none;font-size:18px;">›</button>
+      <div id="galleryCounter" class="hidden" style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;"></div>
     </div>
     <video id="modalPhotoVideo" src="" controls autoplay loop playsinline style="max-width:92vw;max-height:52vh;border-radius:16px;display:none;object-fit:contain;"></video>
     <div id="zoomHint" class="hidden" style="font-size:11.5px;color:var(--ink-soft);">🔍 Pellizca con dos dedos o usa la rueda del mouse para hacer zoom · doble clic/toque para acercar</div>
@@ -735,18 +741,23 @@ function renderChips(){
 }
 function renderMenu(){
   const grid = document.getElementById('menuGrid');
-  const items = menu.filter(i=>i.active!==false && (currentCategory==='Todos' || i.category===currentCategory));
+  const items = menu
+    .filter(i=>i.active!==false && (currentCategory==='Todos' || i.category===currentCategory))
+    .sort((a,b)=> a.price - b.price);
   if(items.length===0){ grid.innerHTML = `<div class="empty-note">No hay platos en esta categoría todavía.</div>`; return; }
   grid.innerHTML = items.map(i=>{
-    const media = i.image
-      ? (i.mediaType==='video'
-          ? `<video src="${i.image}" muted autoplay loop playsinline></video>`
-          : `<img src="${i.image}" alt="${i.name}">`)
+    const mediaList = (i.media && i.media.length) ? i.media : (i.image ? [{url:i.image, type:i.mediaType||'image'}] : []);
+    const first = mediaList[0];
+    const media = first
+      ? (first.type==='video'
+          ? `<video src="${first.url}" muted autoplay loop playsinline></video>`
+          : `<img src="${first.url}" alt="${i.name}">`)
       : (i.emoji||'🍽️');
-    const attrs = i.image ? `data-photo="${i.image}" data-ptype="${i.mediaType||'image'}" data-pname="${i.name.replace(/"/g,'&quot;')}" data-pprice="${money(i.price)}" data-pmsg="${(i.shareMessage||'').replace(/"/g,'&quot;')}"` : '';
+    const badge = mediaList.length>1 ? `<span class="media-count-badge">🖼️ ${mediaList.length}</span>` : '';
+    const attrs = mediaList.length ? `data-item-id="${i.id}"` : '';
     return `
     <div class="item-card">
-      <div class="item-emoji" ${attrs}>${media}</div>
+      <div class="item-emoji" ${attrs}>${media}${badge}</div>
       <div class="item-name">${i.name}</div>
       <div class="item-price">${money(i.price)}</div>
       <button class="add-btn" data-add="${i.id}">Agregar</button>
@@ -756,9 +767,9 @@ function renderMenu(){
   grid.querySelectorAll('[data-add]').forEach(b=>{
     b.addEventListener('click', ()=>addToCart(b.dataset.add));
   });
-  grid.querySelectorAll('[data-photo]').forEach(el=>{
+  grid.querySelectorAll('[data-item-id]').forEach(el=>{
     el.style.cursor = 'zoom-in';
-    el.addEventListener('click', ()=> openPhoto(el.dataset.photo, el.dataset.pname, el.dataset.pprice, el.dataset.ptype, el.dataset.pmsg));
+    el.addEventListener('click', ()=> openGallery(el.dataset.itemId));
   });
 }
 
@@ -904,30 +915,59 @@ function setupPhotoZoom(){
 }
 const resetPhotoZoom = setupPhotoZoom();
 
-function openPhoto(src, name, price, mediaType, customMsg){
+let currentGallery = { mediaList: [], index: 0, item: null };
+
+function openGallery(itemId){
+  const item = menu.find(x=>x.id===itemId);
+  if(!item) return;
+  const mediaList = (item.media && item.media.length) ? item.media : (item.image ? [{url:item.image, type:item.mediaType||'image'}] : []);
+  if(mediaList.length===0) return;
+  currentGallery = { mediaList, index: 0, item };
+  showGalleryIndex(0);
+  openModal('modalPhoto');
+}
+
+function showGalleryIndex(i){
+  const { mediaList, item } = currentGallery;
+  if(mediaList.length===0) return;
+  const idx = ((i % mediaList.length) + mediaList.length) % mediaList.length;
+  currentGallery.index = idx;
+  const media = mediaList[idx];
   const imgEl = document.getElementById('modalPhotoImg');
   const vidEl = document.getElementById('modalPhotoVideo');
   const hint = document.getElementById('zoomHint');
   resetPhotoZoom();
-  if(mediaType==='video'){
-    vidEl.src = src; vidEl.style.display = 'block';
+  if(media.type==='video'){
+    vidEl.src = media.url; vidEl.style.display = 'block';
     imgEl.style.display = 'none'; imgEl.src = '';
     hint.classList.add('hidden');
   }else{
-    imgEl.src = src; imgEl.style.display = 'block';
+    imgEl.src = media.url; imgEl.style.display = 'block';
     vidEl.style.display = 'none'; vidEl.pause(); vidEl.src = '';
     hint.classList.remove('hidden');
   }
-  document.getElementById('sharePhotoBtn').dataset.src = src;
-  document.getElementById('sharePhotoBtn').dataset.type = mediaType || 'image';
+  const showNav = mediaList.length > 1;
+  document.getElementById('galleryPrevBtn').classList.toggle('hidden', !showNav);
+  document.getElementById('galleryNextBtn').classList.toggle('hidden', !showNav);
+  const counter = document.getElementById('galleryCounter');
+  counter.classList.toggle('hidden', !showNav);
+  if(showNav) counter.textContent = `${idx+1} / ${mediaList.length}`;
+
+  document.getElementById('sharePhotoBtn').dataset.src = media.url;
+  document.getElementById('sharePhotoBtn').dataset.type = media.type;
+  const price = item ? money(item.price) : '';
+  const name = item ? item.name : '';
+  const customMsg = item ? item.shareMessage : '';
   const defaultMsg = customMsg && customMsg.trim()
     ? customMsg.trim()
     : (name
         ? `¡Te invito a probar este delicioso plato! 😋\n*${name}*${price? ' - '+price : ''}\nEn Delicias Jasibe 🍔\nPide desde tu celular aquí:\n${SITE_URL}`
         : `¡Mira este plato de Delicias Jasibe! 🍔\nPide aquí: ${SITE_URL}`);
   document.getElementById('photoShareMsg').value = defaultMsg;
-  openModal('modalPhoto');
 }
+
+document.getElementById('galleryPrevBtn').addEventListener('click', ()=> showGalleryIndex(currentGallery.index - 1));
+document.getElementById('galleryNextBtn').addEventListener('click', ()=> showGalleryIndex(currentGallery.index + 1));
 
 document.getElementById('sharePhotoBtn').addEventListener('click', async ()=>{
   const btnEl = document.getElementById('sharePhotoBtn');
@@ -1598,20 +1638,18 @@ function renderEliminados(){
 
 /* ---- Admin: menú ---- */
 document.getElementById('newItemPhoto').addEventListener('change', (e)=>{
-  const file = e.target.files[0];
-  const preview = document.getElementById('newItemPhotoPreview');
-  const videoPreview = document.getElementById('newItemVideoPreview');
-  preview.classList.add('hidden');
-  videoPreview.classList.add('hidden');
-  if(!file) return;
-  const isVideo = file.type.startsWith('video');
-  if(isVideo){
-    videoPreview.src = URL.createObjectURL(file);
-    videoPreview.classList.remove('hidden');
-  }else{
-    preview.src = URL.createObjectURL(file);
-    preview.classList.remove('hidden');
-  }
+  const files = Array.from(e.target.files || []);
+  const wrap = document.getElementById('newItemMediaPreview');
+  wrap.innerHTML = '';
+  files.forEach(file=>{
+    const isVideo = file.type.startsWith('video');
+    const url = URL.createObjectURL(file);
+    const el = isVideo
+      ? Object.assign(document.createElement('video'), { src:url, muted:true, autoplay:true, loop:true, playsInline:true })
+      : Object.assign(document.createElement('img'), { src:url });
+    el.style.cssText = 'width:70px;aspect-ratio:3/4;object-fit:cover;border-radius:10px;';
+    wrap.appendChild(el);
+  });
 });
 
 async function uploadMenuMedia(file){
@@ -1637,7 +1675,7 @@ document.getElementById('addItemBtn').addEventListener('click', async ()=>{
   const price = parseFloat(priceRaw);
   const emoji = document.getElementById('newItemEmoji').value.trim() || '🍽️';
   const shareMessage = document.getElementById('newItemShareMsg').value.trim();
-  const mediaFile = document.getElementById('newItemPhoto').files[0] || null;
+  const mediaFiles = Array.from(document.getElementById('newItemPhoto').files || []);
   let category = document.getElementById('newItemCatSelect').value;
   if(category === '__otra__') category = document.getElementById('newItemCatOther').value.trim();
   if(!name || !category || isNaN(price)){
@@ -1645,14 +1683,21 @@ document.getElementById('addItemBtn').addEventListener('click', async ()=>{
     return;
   }
   const btn = document.getElementById('addItemBtn');
-  btn.disabled = true; btn.textContent = mediaFile ? "Subiendo..." : "Agregando...";
-  let image = null, mediaType = 'image';
-  if(mediaFile){
-    image = await uploadMenuMedia(mediaFile);
-    mediaType = mediaFile.type.startsWith('video') ? 'video' : 'image';
+  btn.disabled = true;
+  let media = [];
+  for(let i=0; i<mediaFiles.length; i++){
+    btn.textContent = `Subiendo ${i+1}/${mediaFiles.length}...`;
+    const url = await uploadMenuMedia(mediaFiles[i]);
+    if(url) media.push({ url, type: mediaFiles[i].type.startsWith('video') ? 'video' : 'image' });
   }
+  if(mediaFiles.length===0) btn.textContent = "Agregando...";
   menu = await loadMenu();
-  menu.push({id: uid('m-'), name, category, price, emoji, image, mediaType, shareMessage, active:true});
+  menu.push({
+    id: uid('m-'), name, category, price, emoji, shareMessage, active:true,
+    media,
+    image: media[0] ? media[0].url : null,
+    mediaType: media[0] ? media[0].type : 'image'
+  });
   await saveMenu(menu);
   document.getElementById('newItemName').value='';
   document.getElementById('newItemPrice').value='';
@@ -1660,8 +1705,7 @@ document.getElementById('addItemBtn').addEventListener('click', async ()=>{
   document.getElementById('newItemShareMsg').value='';
   document.getElementById('newItemCatOther').value='';
   document.getElementById('newItemPhoto').value='';
-  document.getElementById('newItemPhotoPreview').classList.add('hidden');
-  document.getElementById('newItemVideoPreview').classList.add('hidden');
+  document.getElementById('newItemMediaPreview').innerHTML='';
   btn.disabled = false; btn.textContent = "Agregar al menú";
   showToast("Plato agregado");
   renderMenuAdmin();
@@ -1674,23 +1718,28 @@ function renderMenuAdmin(){
   const wrap = document.getElementById('menuEditList');
   if(menu.length===0){ wrap.innerHTML = `<div class="empty-admin">Aún no hay platos.</div>`; return; }
   wrap.innerHTML = menu.map(i=>{
-    const thumb = i.image
-      ? (i.mediaType==='video'
-          ? `<video src="${i.image}" muted style="width:100%;height:100%;object-fit:cover;"></video>`
-          : `<img src="${i.image}" alt="${i.name}" style="width:100%;height:100%;object-fit:cover;">`)
+    const mediaList = (i.media && i.media.length) ? i.media : (i.image ? [{url:i.image, type:i.mediaType||'image'}] : []);
+    const thumb = mediaList[0]
+      ? (mediaList[0].type==='video'
+          ? `<video src="${mediaList[0].url}" muted style="width:100%;height:100%;object-fit:cover;"></video>`
+          : `<img src="${mediaList[0].url}" alt="${i.name}" style="width:100%;height:100%;object-fit:cover;">`)
       : (i.emoji||'🍽️');
     return `
     <div class="item-edit-row ${i.active===false?'toggle-off':''}" style="flex-direction:column;align-items:stretch;">
       <div style="display:flex;gap:10px;align-items:center;">
-        <div style="width:36px;height:36px;border-radius:8px;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;background:#f2e8dc;">${thumb}</div>
+        <div style="width:36px;height:36px;border-radius:8px;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;background:#f2e8dc;position:relative;">${thumb}</div>
         <div style="flex:1;">
           <div class="ie-name">${i.name}</div>
-          <div class="ie-cat">${i.category} · ${money(i.price)}</div>
+          <div class="ie-cat">${i.category} · ${money(i.price)}${mediaList.length>1 ? ` · 🖼️ ${mediaList.length} fotos/videos` : ''}</div>
         </div>
         <button class="mini-btn" data-toggle="${i.id}">${i.active===false?'Activar':'Ocultar'}</button>
         <button class="mini-btn danger" data-delete="${i.id}">Eliminar</button>
       </div>
-      ${i.image ? `
+      <div style="margin-top:8px;">
+        <label class="field" style="margin:4px 0 2px;">Agregar más fotos/videos a este plato</label>
+        <input type="file" data-addmedia="${i.id}" accept="image/jpeg,image/jpg,video/mp4,video/quicktime" multiple>
+      </div>
+      ${mediaList.length ? `
       <div style="margin-top:8px;">
         <label class="field" style="margin:4px 0 2px;">Mensaje al compartir</label>
         <textarea data-msg="${i.id}" rows="2" placeholder="Deja vacío para usar el mensaje automático" style="width:100%;border-radius:10px;border:1.5px solid var(--line);padding:8px;font-family:inherit;font-size:12.5px;">${i.shareMessage||''}</textarea>
@@ -1704,6 +1753,32 @@ function renderMenuAdmin(){
       menu = await loadMenu();
       const it = menu.find(x=>x.id===b.dataset.toggle);
       if(it){ it.active = it.active===false ? true : false; await saveMenu(menu); renderMenuAdmin(); renderChips(); renderMenu(); }
+    });
+  });
+  wrap.querySelectorAll('[data-addmedia]').forEach(input=>{
+    input.addEventListener('change', async (e)=>{
+      const id = input.dataset.addmedia;
+      const files = Array.from(e.target.files || []);
+      if(files.length===0) return;
+      showToast(`Subiendo ${files.length} archivo(s)...`);
+      const uploaded = [];
+      for(const file of files){
+        const url = await uploadMenuMedia(file);
+        if(url) uploaded.push({ url, type: file.type.startsWith('video') ? 'video' : 'image' });
+      }
+      menu = await loadMenu();
+      const it = menu.find(x=>x.id===id);
+      if(it){
+        if(!it.media || !it.media.length){
+          it.media = it.image ? [{url:it.image, type:it.mediaType||'image'}] : [];
+        }
+        it.media = it.media.concat(uploaded);
+        it.image = it.media[0].url;
+        it.mediaType = it.media[0].type;
+        await saveMenu(menu);
+        renderMenuAdmin(); renderMenu();
+        showToast("Fotos/videos agregados");
+      }
     });
   });
   wrap.querySelectorAll('[data-savemsg]').forEach(b=>{
