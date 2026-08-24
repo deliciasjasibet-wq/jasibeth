@@ -558,6 +558,7 @@
     </div>
     <p id="confirmText" style="font-size:14px;color:var(--ink-soft);"></p>
     <p id="confirmCancelInfo" style="font-size:13px;background:#FFF1EA;border:1.5px dashed var(--chili);border-radius:12px;padding:10px 12px;color:var(--ink);"></p>
+    <p style="font-size:12px;color:var(--ink-soft);margin:10px 0 4px;">Se abrió WhatsApp con tu pedido listo para enviar. Si no se abrió, usa este botón:</p>
     <button class="primary-btn whatsapp-btn" id="waBtn">Enviar por WhatsApp</button>
     <button class="secondary-btn" data-close="modalConfirm">Listo</button>
   </div>
@@ -1179,6 +1180,10 @@ document.getElementById('ckTelefono').addEventListener('blur', async ()=>{
 });
 
 document.getElementById('submitOrderBtn').addEventListener('click', async ()=>{
+  // Abrimos la ventana ya mismo (vacía) para que el navegador no la bloquee como popup;
+  // más abajo, cuando el pedido esté listo, le ponemos el link real de WhatsApp.
+  const waWin = window.open('', '_blank');
+
   const nombre = document.getElementById('ckNombre').value.trim();
   const telefono = document.getElementById('ckTelefono').value.trim();
   let direccion = document.getElementById('ckDireccion').value.trim();
@@ -1186,10 +1191,12 @@ document.getElementById('submitOrderBtn').addEventListener('click', async ()=>{
   const errEl = document.getElementById('checkoutError');
   if(!nombre || !telefono){
     errEl.textContent = "Por favor completa nombre y teléfono.";
+    if(waWin) waWin.close();
     return;
   }
   if(selectedEntrega==='domicilio' && !direccion){
     errEl.textContent = "Por favor escribe la dirección de entrega.";
+    if(waWin) waWin.close();
     return;
   }
   if(selectedEntrega==='restaurante') direccion = "Come aquí en el restaurante";
@@ -1238,8 +1245,17 @@ document.getElementById('submitOrderBtn').addEventListener('click', async ()=>{
     `Pedido #${orderForConfirm.folio} por ${money(orderForConfirm.total)}. Lo verás reflejado en la cocina en unos segundos.`;
   document.getElementById('confirmCancelInfo').innerHTML =
     `🔑 Tu clave para cancelar este pedido es <b>${orderForConfirm.cancelPin}</b>. Guárdala por si te equivocaste y necesitas cancelarlo (solo funciona mientras el pedido siga "en espera").`;
+
+  // Abrir WhatsApp automáticamente con el pedido ya armado (el cliente solo debe darle a "Enviar" en WhatsApp)
+  const waLink = buildWhatsAppLink(orderForConfirm);
+  if(waWin){
+    waWin.location.href = waLink;
+  }else{
+    // El navegador bloqueó la ventana emergente; el botón de abajo sirve como respaldo
+    showToast("Toca 'Enviar por WhatsApp' para confirmar tu pedido");
+  }
   document.getElementById('waBtn').onclick = ()=>{
-    window.open(buildWhatsAppLink(orderForConfirm), '_blank');
+    window.open(waLink, '_blank');
   };
   renderPublicOrders();
   openModal('modalConfirm');
