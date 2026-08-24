@@ -2,8 +2,14 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Delicias Jasibe</title>
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Delicias Jasibe">
+<meta name="theme-color" content="#E4572E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -21,14 +27,39 @@
     --radius:18px;
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
+  html,body{margin:0;padding:0;overscroll-behavior:none;}
+  html{height:100%;}
   body{
     background:var(--cream);
     color:var(--ink);
     font-family:'Work Sans',sans-serif;
     -webkit-font-smoothing:antialiased;
     padding-bottom:90px;
+    min-height:100%;
+    overscroll-behavior-y:none;
+    -webkit-user-select:none;user-select:none;
+    -webkit-touch-callout:none;
+    touch-action:pan-x pan-y;
   }
+  input,textarea{-webkit-user-select:text;user-select:text;}
+
+  /* ---------- Kiosk / pantalla de bienvenida ---------- */
+  #kioskGate{
+    position:fixed;inset:0;z-index:9999;
+    background:linear-gradient(160deg,var(--chili),var(--chili-dark));
+    color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:14px;text-align:center;padding:24px;
+  }
+  #kioskGate .g-logo{width:72px;height:72px;border-radius:20px;background:var(--mustard);
+    display:flex;align-items:center;justify-content:center;font-size:36px;
+    box-shadow:0 6px 0 rgba(0,0,0,.15) inset;}
+  #kioskGate h1{margin:0;font-family:'Fredoka',sans-serif;font-size:24px;}
+  #kioskGate p{margin:0;font-size:13px;opacity:.9;max-width:280px;}
+  #kioskGate button{
+    margin-top:8px;background:#fff;color:var(--chili-dark);border:none;border-radius:999px;
+    padding:16px 34px;font-weight:700;font-size:16px;box-shadow:0 8px 20px rgba(0,0,0,.25);
+  }
+  #kioskGate button:active{transform:scale(.97);}
   h1,h2,h3,.display{font-family:'Fredoka',sans-serif;font-weight:600;}
   button{font-family:inherit;cursor:pointer;}
   .hidden{display:none !important;}
@@ -306,6 +337,13 @@
 <body>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
+<div id="kioskGate">
+  <div class="g-logo">🍔</div>
+  <h1>Delicias Jasibe</h1>
+  <p>Toca el botón para entrar en modo pantalla completa. No podrás salir a otras apps ni al navegador mientras uses el menú.</p>
+  <button id="kioskEnterBtn">Entrar al menú 🍽️</button>
+</div>
+
 <header class="topbar">
   <div class="brand-row">
     <div class="brand">
@@ -327,6 +365,7 @@
 <main id="view-cliente">
   <div id="scheduleBanner" class="schedule-banner"></div>
   <div id="publicOrdersBoard" class="public-orders hidden"></div>
+  <button id="openCancelOrderBtn" class="secondary-btn" style="margin-bottom:14px;">❌ ¿Te equivocaste? Cancela tu pedido</button>
   <div class="chips" id="catChips"></div>
   <div class="menu-grid" id="menuGrid"></div>
 </main>
@@ -516,8 +555,23 @@
       <div class="cooking-text">¡Comenzamos a preparar tu comida!</div>
     </div>
     <p id="confirmText" style="font-size:14px;color:var(--ink-soft);"></p>
+    <p id="confirmCancelInfo" style="font-size:13px;background:#FFF1EA;border:1.5px dashed var(--chili);border-radius:12px;padding:10px 12px;color:var(--ink);"></p>
     <button class="primary-btn whatsapp-btn" id="waBtn">Enviar por WhatsApp</button>
     <button class="secondary-btn" data-close="modalConfirm">Listo</button>
+  </div>
+</div>
+
+<div id="modalCancelOrder" class="overlay hidden">
+  <div class="sheet">
+    <div class="sheet-head"><h2>Cancelar mi pedido</h2><button class="close-x" data-close="modalCancelOrder">✕</button></div>
+    <p style="font-size:13px;color:var(--ink-soft);margin-top:0;">Ingresa el número de pedido (folio) y la clave de 4 dígitos que te dimos al confirmarlo. Solo puedes cancelar mientras el pedido siga <b>en espera</b> (aún no lo empieza a preparar la cocina).</p>
+    <label class="field">Número de pedido (folio)</label>
+    <input type="text" id="cancelFolio" inputmode="numeric" placeholder="Ej: 12">
+    <label class="field">Clave de cancelación</label>
+    <input type="text" id="cancelPinInput" inputmode="numeric" maxlength="4" placeholder="Ej: 4821">
+    <p id="cancelOrderError" style="color:var(--danger);font-size:13px;min-height:16px;margin:8px 0 0;"></p>
+    <button class="primary-btn" id="confirmCancelOrderBtn" style="background:var(--danger);">Cancelar mi pedido</button>
+    <button class="secondary-btn" data-close="modalCancelOrder">Volver</button>
   </div>
 </div>
 
@@ -1137,6 +1191,7 @@ document.getElementById('submitOrderBtn').addEventListener('click', async ()=>{
   const now = new Date();
   const todayKey = businessDayStr(now);
   const folioNum = orders.filter(o => businessDayStr(new Date(o.createdAt)) === todayKey).length + 1;
+  const cancelPin = String(Math.floor(1000 + Math.random()*9000)); // clave de 4 dígitos para que el cliente pueda cancelar su propio pedido
   const order = {
     id: uid('ord-'),
     folio: folioNum,
@@ -1147,6 +1202,7 @@ document.getElementById('submitOrderBtn').addEventListener('click', async ()=>{
     metodoPago: selectedPay,
     estadoPago: 'pendiente',
     estado: 'recibido',
+    cancelPin,
     createdAt: new Date().toISOString()
   };
   orders.push(order);
@@ -1171,6 +1227,8 @@ document.getElementById('submitOrderBtn').addEventListener('click', async ()=>{
 
   document.getElementById('confirmText').textContent =
     `Pedido #${orderForConfirm.folio} por ${money(orderForConfirm.total)}. Lo verás reflejado en la cocina en unos segundos.`;
+  document.getElementById('confirmCancelInfo').innerHTML =
+    `🔑 Tu clave para cancelar este pedido es <b>${orderForConfirm.cancelPin}</b>. Guárdala por si te equivocaste y necesitas cancelarlo (solo funciona mientras el pedido siga "en espera").`;
   document.getElementById('waBtn').onclick = ()=>{
     window.open(buildWhatsAppLink(orderForConfirm), '_blank');
   };
@@ -1196,6 +1254,50 @@ function buildWhatsAppLink(order){
   const text = encodeURIComponent(lines.join('\n'));
   return `https://wa.me/${RESTAURANT_WHATSAPP}?text=${text}`;
 }
+
+/* ================= CANCELAR PEDIDO (CLIENTE) ================= */
+document.getElementById('openCancelOrderBtn').addEventListener('click', ()=>{
+  document.getElementById('cancelFolio').value = '';
+  document.getElementById('cancelPinInput').value = '';
+  document.getElementById('cancelOrderError').textContent = '';
+  openModal('modalCancelOrder');
+});
+
+document.getElementById('confirmCancelOrderBtn').addEventListener('click', async ()=>{
+  const errEl = document.getElementById('cancelOrderError');
+  const folioNum = parseInt(document.getElementById('cancelFolio').value.trim(), 10);
+  const pin = document.getElementById('cancelPinInput').value.trim();
+  if(!folioNum || !pin){
+    errEl.textContent = "Completa el número de pedido y la clave.";
+    return;
+  }
+  orders = await loadOrders(); // refrescar por si ya cambió de estado
+  const todayKey = businessDayStr(new Date());
+  const order = orders.find(o => o.folio === folioNum && businessDayStr(new Date(o.createdAt)) === todayKey);
+  if(!order){
+    errEl.textContent = "No encontramos ese pedido. Revisa el número de folio.";
+    return;
+  }
+  if(order.cancelPin !== pin){
+    errEl.textContent = "La clave no es correcta.";
+    return;
+  }
+  if(order.estado !== 'recibido'){
+    errEl.textContent = "Este pedido ya está en preparación o más adelante y no se puede cancelar desde aquí. Comunícate con el restaurante.";
+    return;
+  }
+  const idx = orders.findIndex(o=>o.id===order.id);
+  orders.splice(idx, 1);
+  await saveOrders(orders);
+  let deletedOrders = await loadDeletedOrders();
+  deletedOrders.unshift({ ...order, deletedAt: new Date().toISOString(), cancelledByClient: true });
+  await saveDeletedOrders(deletedOrders);
+  renderCocina();
+  if(adminLoggedIn) renderAdmin();
+  renderPublicOrders();
+  closeModal('modalCancelOrder');
+  showToast(`Pedido #${order.folio} cancelado. Ya puedes hacer uno nuevo.`);
+});
 
 /* ================= COCINA ================= */
 function askPin(callback){
@@ -1843,6 +1945,65 @@ function renderMenuAdmin(){
     });
   });
 }
+
+/* ================= MODO KIOSCO / PANTALLA COMPLETA ================= */
+(function(){
+  const el = document.documentElement;
+
+  function requestFS(){
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+    if(req) req.call(el).catch(()=>{});
+    // Bloquea la orientación si el navegador lo permite (mejor esfuerzo)
+    if(screen.orientation && screen.orientation.lock){
+      screen.orientation.lock('portrait').catch(()=>{});
+    }
+  }
+
+  function isFullscreen(){
+    return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+  }
+
+  // Botón de bienvenida: primer toque del usuario, requerido por los navegadores para activar pantalla completa
+  document.getElementById('kioskEnterBtn').addEventListener('click', ()=>{
+    requestFS();
+    document.getElementById('kioskGate').style.display = 'none';
+  });
+
+  // Si el usuario logra salir de pantalla completa (gesto del sistema), se la volvemos a pedir
+  ['fullscreenchange','webkitfullscreenchange','msfullscreenchange'].forEach(evt=>{
+    document.addEventListener(evt, ()=>{
+      if(!isFullscreen()){
+        setTimeout(requestFS, 150);
+      }
+    });
+  });
+
+  // Bloquear zoom con dos dedos (pinch) y doble-tap zoom
+  document.addEventListener('gesturestart', e=>e.preventDefault());
+  document.addEventListener('touchmove', e=>{ if(e.touches.length>1) e.preventDefault(); }, {passive:false});
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', e=>{
+    const now = Date.now();
+    if(now - lastTouchEnd <= 300) e.preventDefault();
+    lastTouchEnd = now;
+  }, false);
+
+  // Bloquear menú contextual (mantener presionado) y arrastrar imágenes
+  document.addEventListener('contextmenu', e=>e.preventDefault());
+  document.addEventListener('dragstart', e=>e.preventDefault());
+
+  // Atrapar el botón "atrás" del navegador/gesto para que no salga de la página
+  history.pushState(null, '', location.href);
+  window.addEventListener('popstate', ()=>{
+    history.pushState(null, '', location.href);
+  });
+
+  // Advertir antes de que se cierre o recargue accidentalmente la pestaña
+  window.addEventListener('beforeunload', (e)=>{
+    e.preventDefault();
+    e.returnValue = '';
+  });
+})();
 
 /* ================= INIT ================= */
 async function init(){
