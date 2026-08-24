@@ -165,6 +165,8 @@
   .cart-row .ci-price{font-size:12px;color:var(--ink-soft);}
   .qty-ctrl{display:flex;align-items:center;gap:8px;}
   .qty-ctrl button{width:26px;height:26px;border-radius:8px;border:1px solid var(--line);background:#fff;font-weight:700;}
+  .cart-remove-btn{background:none;border:none;font-size:16px;padding:4px 2px 4px 8px;color:var(--danger);opacity:.75;}
+  .cart-remove-btn:active{opacity:1;transform:scale(.92);}
   .cart-total-row{display:flex;justify-content:space-between;font-weight:700;font-size:16px;padding:14px 0 6px;}
 
   label.field{display:block;font-size:12px;font-weight:600;color:var(--ink-soft);margin:12px 0 4px;}
@@ -1088,10 +1090,12 @@ function renderCartModal(){
           <span>${c.qty}</span>
           <button data-inc="${c.itemId}">+</button>
         </div>
+        <button class="cart-remove-btn" data-remove="${c.itemId}" title="Quitar">🗑️</button>
       </div>
     `).join('');
     wrap.querySelectorAll('[data-inc]').forEach(b=>b.addEventListener('click',()=>{ changeQty(b.dataset.inc,1); }));
     wrap.querySelectorAll('[data-dec]').forEach(b=>b.addEventListener('click',()=>{ changeQty(b.dataset.dec,-1); }));
+    wrap.querySelectorAll('[data-remove]').forEach(b=>b.addEventListener('click',()=>{ removeFromCart(b.dataset.remove); }));
   }
   document.getElementById('cartModalTotal').textContent = money(cartTotal());
 }
@@ -1100,6 +1104,11 @@ function changeQty(itemId, delta){
   if(!c) return;
   c.qty += delta;
   if(c.qty<=0) cart = cart.filter(x=>x.itemId!==itemId);
+  renderCartModal();
+  renderCartBar();
+}
+function removeFromCart(itemId){
+  cart = cart.filter(x=>x.itemId!==itemId);
   renderCartModal();
   renderCartBar();
 }
